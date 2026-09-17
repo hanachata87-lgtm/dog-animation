@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<title>わんわん ぴょこぴょこ</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#ffd9e8">
+<meta name="description" content="犬の写真を切り抜いて、かわいく動かすアプリ。写真はスマホの中だけで処理します。">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🐶</text></svg>">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<!-- ========== 1. さいしょの画面 ========== -->
+<section class="screen is-active" id="screen-start">
+  <div class="pad">
+    <h1 class="title">🐶 わんわん<br>ぴょこぴょこ</h1>
+    <p class="lead">犬の写真をえらんで、かわいく動かそう。<br>
+      <span class="note">写真はこのスマホの中だけで処理します。どこにも送られません。</span></p>
+
+    <label class="btn btn-primary btn-huge">
+      写真をえらぶ
+      <input type="file" id="file-input" accept="image/*" hidden>
+    </label>
+
+    <button class="btn btn-ghost" id="btn-resume" hidden>まえのわんちゃんで あそぶ</button>
+
+    <p class="hint" id="start-hint">はじめてのときは、犬がはっきり写っている明るい写真がおすすめです。</p>
+  </div>
+</section>
+
+<!-- ========== 2. 切り抜き画面 ========== -->
+<section class="screen" id="screen-cut">
+  <header class="bar">
+    <button class="btn btn-small btn-ghost" id="btn-back-start">もどる</button>
+    <span class="bar-title" id="cut-title">犬をタップしてね</span>
+  </header>
+
+  <div class="stage" id="cut-stage">
+    <div class="canvas-wrap" id="canvas-wrap">
+      <canvas id="photo-canvas"></canvas>
+      <canvas id="overlay-canvas"></canvas>
+      <div class="spinner" id="cut-spinner" hidden><div class="spin"></div><span id="spinner-text">よみこみ中…</span></div>
+    </div>
+  </div>
+
+  <div class="tools">
+    <div class="tool-row" role="group" aria-label="切り抜きの道具">
+      <button class="tool is-on" id="tool-tap"   data-mode="tap">👆 タップ</button>
+      <button class="tool"       id="tool-add"   data-mode="add">✏️ たす</button>
+      <button class="tool"       id="tool-erase" data-mode="erase">🧽 けす</button>
+      <button class="tool"       id="tool-undo">↩️ もどす</button>
+    </div>
+    <label class="slider-row">
+      <span>ふでの太さ</span>
+      <input type="range" id="brush-size" min="8" max="90" value="30">
+    </label>
+    <p class="hint" id="cut-hint">犬のからだの まん中あたりを タップしてください。</p>
+    <button class="btn btn-primary btn-huge" id="btn-to-motion" disabled>これでOK →</button>
+  </div>
+</section>
+
+<!-- ========== 3. 動きをえらぶ画面 ========== -->
+<section class="screen" id="screen-motion">
+  <header class="bar">
+    <button class="btn btn-small btn-ghost" id="btn-back-cut">もどる</button>
+    <span class="bar-title">動きをえらぶ</span>
+  </header>
+
+  <div class="pad">
+    <div class="preview-box"><canvas id="preview-canvas"></canvas></div>
+
+    <label class="field">
+      <span class="field-label">どんな動き？</span>
+      <select id="motion-select" class="select">
+        <option value="pyoko">ぴょこぴょこ（全身ではねる）</option>
+        <option value="peekaboo" disabled>いないいないばあ（第2段階でつくります）</option>
+        <option value="tail" disabled>しっぽふりふり（第3段階でつくります）</option>
+        <option value="random" disabled>おまかせ（第3段階でつくります）</option>
+      </select>
+    </label>
+
+    <label class="field">
+      <span class="field-label">はやさ</span>
+      <select id="speed-select" class="select">
+        <option value="1100">ゆっくり</option>
+        <option value="800" selected>ふつう</option>
+        <option value="560">はやい</option>
+      </select>
+    </label>
+
+    <button class="btn btn-primary btn-huge" id="btn-play">▶ ぜんがめんで あそぶ</button>
+    <p class="hint">
+      再生中は画面をさわっても止まりません（さわると わんちゃんが よろこびます）。<br>
+      おわるときは、<b>右上のボタンを2.5秒ながおし</b>してください。
+    </p>
+  </div>
+</section>
+
+<!-- ========== 4. 再生オーバーレイ ========== -->
+<div class="player" id="player" hidden>
+  <canvas id="play-canvas"></canvas>
+  <button class="exit-btn" id="exit-btn" aria-label="ながおしで おわる">
+    <svg viewBox="0 0 48 48" aria-hidden="true">
+      <circle class="ring-bg" cx="24" cy="24" r="20"></circle>
+      <circle class="ring-fg" id="exit-ring" cx="24" cy="24" r="20"></circle>
+    </svg>
+    <span class="exit-label">ながおし</span>
+  </button>
+  <div class="toast" id="play-toast">さわっても だいじょうぶ！</div>
+</div>
+
+<div class="alert" id="alert" hidden><div class="alert-box"><p id="alert-text"></p><button class="btn btn-primary" id="alert-ok">OK</button></div></div>
+
+<script type="module" src="js/main.js"></script>
+</body>
+</html>
