@@ -4,10 +4,12 @@
    ============================================================ */
 
 import { loadSegmenter, segmentAt } from './segmenter.js';
-import { loadPhotoToCanvas, maskFromLabels, paintCircle, buildCutout } from './cutout.js';
+import { loadPhotoToCanvas, maskFromLabels, paintCircle, buildCutout, buildFaceCrop } from './cutout.js';
 import { createPlayer } from './player.js';
+import { MOTIONS, motionsForPart } from './motions.js';
 
-const STORE_KEY = 'dogAnim.cutout.v1';
+const STORE_KEY = 'dogAnim.play.v2';
+const OLD_KEY = 'dogAnim.cutout.v1';
 const $ = (id) => document.getElementById(id);
 
 /* ---------- 状態 ---------- */
@@ -15,7 +17,10 @@ const state = {
   photo: null,      // 写真の canvas
   mask: null,       // Uint8Array（0 か 255）
   mw: 0, mh: 0,
-  cutout: null,     // 切り抜き後の canvas / img
+  cutout: null,     // 切り抜き後の canvas / img（全身）
+  part: 'body',     // body（ぜんしん）か face（かおだけ）
+  face: null,       // かおの丸 { cx, cy, r }（切り抜き画像の中の座標）
+  playImage: null,  // じっさいに動かす絵
   mode: 'tap',      // tap | add | erase
   noAI: false,      // AIが読みこめなかったときは手ぬりだけで進める
   undo: [],
@@ -27,6 +32,10 @@ const overlayCanvas = $('overlay-canvas');
 const photoCtx      = photoCanvas.getContext('2d');
 const overlayCtx    = overlayCanvas.getContext('2d');
 const previewCanvas = $('preview-canvas');
+const partCanvas    = $('part-canvas');
+const faceCanvas    = $('face-canvas');
+const faceOverlay   = $('face-overlay');
+const faceOverlayCtx = faceOverlay.getContext('2d');
 
 const player = createPlayer({
   root: $('player'),
@@ -88,28 +97,38 @@ function fallbackToBrush(message) {
   alertBox(message);
 }
 
-/* ---------- 写真の表示サイズ ---------- */
-function layoutPhoto() {
-  if (!state.photo) return;
-  const stage = $('cut-stage');
+/* ---------- 画面の大きさあわせ（切り抜き画面と 顔まる画面で共通） ---------- */
+function fitStage(stageId, wrapId, canvases, srcW, srcH) {
+  const stage = $(stageId);
   const availW = stage.clientWidth  - 20;
   const availH = stage.clientHeight - 20;
-  const scale = Math.min(availW / state.photo.width, availH / state.photo.height);
-  const w = Math.max(40, Math.round(state.photo.width  * scale));
-  const h = Math.max(40, Math.round(state.photo.height * scale));
-
-  photoCanvas.width  = state.photo.width;
-  photoCanvas.height = state.photo.height;
-  overlayCanvas.width  = state.photo.width;
-  overlayCanvas.height = state.photo.height;
-  for (const c of [photoCanvas, overlayCanvas]) {
+  if (availW <= 0 || availH <= 0) return;
+  const scale = Math.min(availW / srcW, availH / srcH);
+  const w = Math.max(40, Math.round(srcW * scale));
+  const h = Math.max(40, Math.round(srcH * scale));
+  for (const c of canvases) {
+    c.width = srcW; c.height = srcH;          // ここで中身は消えるので、呼んだ側で描きなおす
     c.style.width  = w + 'px';
     c.style.height = h + 'px';
   }
-  $('canvas-wrap').style.width  = w + 'px';
-  $('canvas-wrap').style.height = h + 'px';
+  $(wrapId).style.width  = w + 'px';
+  $(wrapId).style.height = h + 'px';
 }
-window.addEventListener('resize', () => { layoutPhoto(); drawPhoto(); });
+
+function layoutPhoto() {
+  if (!state.photo) return;
+  fitStage('cut-stage', 'canvas-wrap', [photoCanvas, overlayCanvas], state.mw, state.mh);
+}
+
+function layoutFace() {
+  if (!state.cutout) return;
+  fitStage('face-stage', 'face-wrap', [faceCanvas, faceOverlay], state.cutout.width, state.cutout.height);
+}
+
+window.addEventListener('resize', () => {
+  if ($('screen-cut').classList.contains('is-active')) { layoutPhoto(); drawPhoto(); }
+  if ($('screen-face').classList.contains('is-active')) { layoutFace(); drawFace(); }
+});
 
 /* ---------- 写真とマスクを描く ---------- */
 function drawPhoto() {
@@ -289,32 +308,162 @@ function resampleMask(src, sw, sh, dw, dh) {
   return out;
 }
 
-/* ---------- 切り抜き完了 → 動きえらび ---------- */
+/* ---------- 切り抜き完了 → 顔だけ／ぜんしん をえらぶ ---------- */
 $('btn-to-motion').addEventListener('click', () => {
   const cut = buildCutout(state.photo, state.mask, state.mw, state.mh);
   if (!cut) { alertBox('切り抜く場所がえらばれていません。'); return; }
   state.cutout = cut;
-  saveCutout(cut);
-  showPreview(cut);
-  showScreen('screen-motion');
+  state.face = null;
+  drawInto(partCanvas, cut, 0.30);
+  showScreen('screen-part');
 });
 
-function showPreview(cut) {
+$('btn-part-body').addEventListener('click', () => {
+  state.part = 'body';
+  state.playImage = state.cutout;
+  goMotion();
+});
+
+$('btn-part-face').addEventListener('click', () => {
+  state.part = 'face';
+  showScreen('screen-face');
+  initFaceCircle();
+  layoutFace();
+  drawFace();
+});
+
+/* ---------- かおの丸あわせ ---------- */
+function initFaceCircle() {
+  const c = state.cutout;
+  if (state.face) return;                       // もどってきたときは前のままにする
+  // 犬は たてに長い写真なら上のほう、よこに長いなら やや上に顔があることが多い
+  const r = Math.min(c.width, c.height) * 0.35;
+  state.face = {
+    cx: c.width / 2,
+    cy: c.height > c.width ? c.height * 0.28 : c.height * 0.40,
+    r,
+  };
+  $('face-size').value = String(radiusToSlider(r));
+}
+
+const faceMaxR = () => Math.max(state.cutout.width, state.cutout.height) * 0.60;
+const sliderToRadius = (v) => (Number(v) / 100) * faceMaxR();
+const radiusToSlider = (r) => Math.max(12, Math.min(100, Math.round(r / faceMaxR() * 100)));
+
+function drawFace() {
+  const c = state.cutout;
+  if (!c || !state.face) return;
+  const ctx = faceCanvas.getContext('2d');
+  ctx.clearRect(0, 0, c.width, c.height);
+  ctx.drawImage(c, 0, 0);
+
+  const { cx, cy, r } = state.face;
+  const g = faceOverlayCtx;
+  g.clearRect(0, 0, c.width, c.height);
+  g.fillStyle = 'rgba(20,10,20,.55)';
+  g.fillRect(0, 0, c.width, c.height);
+  g.globalCompositeOperation = 'destination-out';
+  g.beginPath(); g.arc(cx, cy, r, 0, Math.PI * 2); g.fill();
+  g.globalCompositeOperation = 'source-over';
+  g.strokeStyle = '#fff';
+  g.lineWidth = Math.max(2, c.width * 0.006);
+  g.beginPath(); g.arc(cx, cy, r, 0, Math.PI * 2); g.stroke();
+}
+
+function faceXY(e) {
+  const rect = faceCanvas.getBoundingClientRect();
+  return {
+    x: (e.clientX - rect.left) / rect.width  * state.cutout.width,
+    y: (e.clientY - rect.top)  / rect.height * state.cutout.height,
+  };
+}
+
+let faceDragging = false;
+function moveFace(e) {
+  const pt = faceXY(e);
+  state.face.cx = Math.max(0, Math.min(state.cutout.width,  pt.x));
+  state.face.cy = Math.max(0, Math.min(state.cutout.height, pt.y));
+  drawFace();
+}
+faceOverlay.addEventListener('pointerdown', (e) => {
+  e.preventDefault();
+  faceDragging = true;
+  faceOverlay.setPointerCapture(e.pointerId);
+  moveFace(e);
+});
+faceOverlay.addEventListener('pointermove', (e) => { if (faceDragging) { e.preventDefault(); moveFace(e); } });
+faceOverlay.addEventListener('pointerup',     () => { faceDragging = false; });
+faceOverlay.addEventListener('pointercancel', () => { faceDragging = false; });
+faceOverlay.addEventListener('touchstart', (e) => e.preventDefault(), { passive: false });
+faceOverlay.addEventListener('touchmove',  (e) => e.preventDefault(), { passive: false });
+
+$('face-size').addEventListener('input', (e) => {
+  if (!state.face) return;
+  state.face.r = sliderToRadius(e.target.value);
+  drawFace();
+});
+
+$('btn-face-ok').addEventListener('click', () => {
+  const { cx, cy, r } = state.face;
+  state.playImage = buildFaceCrop(state.cutout, cx, cy, r);
+  goMotion();
+});
+
+/* ---------- 動きをえらぶ ---------- */
+function goMotion() {
+  fillMotionSelect(state.part);
+  drawInto(previewCanvas, state.playImage, 0.34);
+  savePlay();
+  showScreen('screen-motion');
+}
+
+/** えらんだ写真の種類で使える動きだけをならべる（これからの動きは灰色で見せる） */
+function fillMotionSelect(part, keep) {
+  const sel = $('motion-select');
+  sel.innerHTML = '';
+  for (const name of motionsForPart(part)) {
+    const o = document.createElement('option');
+    o.value = name;
+    o.textContent = MOTIONS[name].label;
+    sel.appendChild(o);
+  }
+  for (const text of ['しっぽふりふり（第3段階でつくります）',
+                      'おてふり（第3段階でつくります）',
+                      'おまかせ（第3段階でつくります）']) {
+    const o = document.createElement('option');
+    o.textContent = text;
+    o.disabled = true;
+    sel.appendChild(o);
+  }
+  if (keep && [...sel.options].some((o) => o.value === keep)) sel.value = keep;
+  showMotionDesc();
+}
+
+/** えらんでいる動きの説明を、ドロップダウンの下に出す */
+function showMotionDesc() {
+  const m = MOTIONS[$('motion-select').value];
+  $('motion-desc').textContent = m ? m.desc : '';
+}
+$('motion-select').addEventListener('change', showMotionDesc);
+
+/** canvas に絵をおさめて表示する（プレビュー用） */
+function drawInto(canvas, img, maxHeightRatio) {
   const maxW = Math.min(420, window.innerWidth - 80);
-  const maxH = window.innerHeight * 0.34;
-  const s = Math.min(maxW / cut.width, maxH / cut.height, 1);
-  previewCanvas.width = cut.width;
-  previewCanvas.height = cut.height;
-  previewCanvas.style.width  = Math.round(cut.width  * s) + 'px';
-  previewCanvas.style.height = Math.round(cut.height * s) + 'px';
-  previewCanvas.getContext('2d').drawImage(cut, 0, 0);
+  const maxH = window.innerHeight * maxHeightRatio;
+  const s = Math.min(maxW / img.width, maxH / img.height, 1);
+  canvas.width = img.width;
+  canvas.height = img.height;
+  canvas.style.width  = Math.round(img.width  * s) + 'px';
+  canvas.style.height = Math.round(img.height * s) + 'px';
+  canvas.getContext('2d').drawImage(img, 0, 0);
 }
 
 /* ---------- 再生 ---------- */
 $('btn-play').addEventListener('click', () => {
-  if (!state.cutout) return;
+  if (!state.playImage) return;
+  savePlay();
   player.start({
-    cutout: state.cutout,
+    cutout: state.playImage,
     motionName: $('motion-select').value,
     speed: $('speed-select').value,
     onExit: () => showScreen('screen-motion'),
@@ -323,37 +472,54 @@ $('btn-play').addEventListener('click', () => {
 
 /* ---------- もどる ---------- */
 $('btn-back-start').addEventListener('click', () => showScreen('screen-start'));
-$('btn-back-cut').addEventListener('click', () => {
+$('btn-back-cut2').addEventListener('click', () => {
   if (state.photo) { showScreen('screen-cut'); layoutPhoto(); drawPhoto(); }
   else showScreen('screen-start');
 });
+$('btn-back-part').addEventListener('click', () => showScreen('screen-part'));
+$('btn-back-part2').addEventListener('click', () => {
+  if (!state.cutout) { showScreen('screen-start'); return; }
+  if (state.part === 'face') { showScreen('screen-face'); layoutFace(); drawFace(); }
+  else showScreen('screen-part');
+});
 
 /* ---------- 前回のわんちゃんを覚えておく（この端末の中だけ） ---------- */
-function saveCutout(cut) {
+function savePlay() {
   try {
-    const s = Math.min(1, 512 / Math.max(cut.width, cut.height));
+    const img = state.playImage;
+    if (!img) return;
+    const s = Math.min(1, 512 / Math.max(img.width, img.height));
     const small = document.createElement('canvas');
-    small.width  = Math.round(cut.width * s);
-    small.height = Math.round(cut.height * s);
-    small.getContext('2d').drawImage(cut, 0, 0, small.width, small.height);
-    localStorage.setItem(STORE_KEY, small.toDataURL('image/png'));
+    small.width  = Math.max(1, Math.round(img.width  * s));
+    small.height = Math.max(1, Math.round(img.height * s));
+    small.getContext('2d').drawImage(img, 0, 0, small.width, small.height);
+    localStorage.setItem(STORE_KEY, JSON.stringify({
+      img: small.toDataURL('image/png'),
+      part: state.part,
+      motion: $('motion-select').value,
+      speed: $('speed-select').value,
+    }));
+    localStorage.removeItem(OLD_KEY);
   } catch { /* 保存できなくても動作には影響しない */ }
 }
 
 (function restore() {
   let saved = null;
-  try { saved = localStorage.getItem(STORE_KEY); } catch {}
-  if (!saved) return;
+  try { saved = JSON.parse(localStorage.getItem(STORE_KEY) || 'null'); } catch {}
+  if (!saved || !saved.img) return;
   const img = new Image();
   img.onload = () => {
-    state.cutout = img;
+    state.playImage = img;
+    state.part = saved.part === 'face' ? 'face' : 'body';
     $('btn-resume').hidden = false;
     $('btn-resume').addEventListener('click', () => {
-      showPreview(img);
+      fillMotionSelect(state.part, saved.motion);
+      if (saved.speed) $('speed-select').value = saved.speed;
+      drawInto(previewCanvas, img, 0.34);
       showScreen('screen-motion');
     });
   };
-  img.src = saved;
+  img.src = saved.img;
 })();
 
 /* ---------- ページ全体のズーム・長押しメニューをおさえる ---------- */

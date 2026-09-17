@@ -152,3 +152,27 @@ export function buildCutout(photoCanvas, mask, width, height, { pad = 6, feather
   ctx.globalCompositeOperation = 'source-over';
   return out;
 }
+
+/**
+ * 切り抜いた犬から「顔だけ」を丸く取り出す。
+ * ふちをぼかしてあるので、首のところがスパッと切れて不自然にならない。
+ * @param {number} cx,cy,r  切り抜き画像の中での 円の中心と半径（画素）
+ */
+export function buildFaceCrop(cutout, cx, cy, r) {
+  const size = Math.max(16, Math.round(r * 2));
+  const out = document.createElement('canvas');
+  out.width = size; out.height = size;
+  const ctx = out.getContext('2d');
+
+  ctx.drawImage(cutout, cx - r, cy - r, r * 2, r * 2, 0, 0, size, size);
+
+  const g = ctx.createRadialGradient(size / 2, size / 2, size * 0.44,
+                                     size / 2, size / 2, size * 0.50);
+  g.addColorStop(0, 'rgba(0,0,0,1)');
+  g.addColorStop(1, 'rgba(0,0,0,0)');
+  ctx.globalCompositeOperation = 'destination-in';
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, size, size);
+  ctx.globalCompositeOperation = 'source-over';
+  return out;
+}

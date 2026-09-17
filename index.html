@@ -39,7 +39,7 @@
   <div class="stage" id="cut-stage">
     <div class="canvas-wrap" id="canvas-wrap">
       <canvas id="photo-canvas"></canvas>
-      <canvas id="overlay-canvas"></canvas>
+      <canvas id="overlay-canvas" class="overlay"></canvas>
       <div class="spinner" id="cut-spinner" hidden><div class="spin"></div><span id="spinner-text">よみこみ中…</span></div>
     </div>
   </div>
@@ -60,10 +60,49 @@
   </div>
 </section>
 
-<!-- ========== 3. 動きをえらぶ画面 ========== -->
+<!-- ========== 3. 顔だけ／全身をえらぶ画面 ========== -->
+<section class="screen" id="screen-part">
+  <header class="bar">
+    <button class="btn btn-small btn-ghost" id="btn-back-cut2">もどる</button>
+    <span class="bar-title">どこを つかう？</span>
+  </header>
+
+  <div class="pad">
+    <div class="preview-box"><canvas id="part-canvas"></canvas></div>
+    <button class="btn btn-primary btn-huge" id="btn-part-body">🐕 ぜんしん</button>
+    <button class="btn btn-primary btn-huge" id="btn-part-face">😀 かおだけ</button>
+    <p class="hint">「かおだけ」をえらぶと〈いないいないばあ〉であそべます。</p>
+  </div>
+</section>
+
+<!-- ========== 4. 顔にまるを合わせる画面 ========== -->
+<section class="screen" id="screen-face">
+  <header class="bar">
+    <button class="btn btn-small btn-ghost" id="btn-back-part">もどる</button>
+    <span class="bar-title">かおに まるを あわせてね</span>
+  </header>
+
+  <div class="stage" id="face-stage">
+    <div class="canvas-wrap" id="face-wrap">
+      <canvas id="face-canvas"></canvas>
+      <canvas id="face-overlay" class="overlay"></canvas>
+    </div>
+  </div>
+
+  <div class="tools">
+    <label class="slider-row">
+      <span>まるの大きさ</span>
+      <input type="range" id="face-size" min="12" max="100" value="46">
+    </label>
+    <p class="hint">まるを 指で動かして、犬の顔に あわせてください。</p>
+    <button class="btn btn-primary btn-huge" id="btn-face-ok">これでOK →</button>
+  </div>
+</section>
+
+<!-- ========== 5. 動きをえらぶ画面 ========== -->
 <section class="screen" id="screen-motion">
   <header class="bar">
-    <button class="btn btn-small btn-ghost" id="btn-back-cut">もどる</button>
+    <button class="btn btn-small btn-ghost" id="btn-back-part2">もどる</button>
     <span class="bar-title">動きをえらぶ</span>
   </header>
 
@@ -72,20 +111,16 @@
 
     <label class="field">
       <span class="field-label">どんな動き？</span>
-      <select id="motion-select" class="select">
-        <option value="pyoko">ぴょこぴょこ（全身ではねる）</option>
-        <option value="peekaboo" disabled>いないいないばあ（第2段階でつくります）</option>
-        <option value="tail" disabled>しっぽふりふり（第3段階でつくります）</option>
-        <option value="random" disabled>おまかせ（第3段階でつくります）</option>
-      </select>
+      <select id="motion-select" class="select"></select>
+      <p class="hint" id="motion-desc"></p>
     </label>
 
     <label class="field">
       <span class="field-label">はやさ</span>
       <select id="speed-select" class="select">
-        <option value="1100">ゆっくり</option>
-        <option value="800" selected>ふつう</option>
-        <option value="560">はやい</option>
+        <option value="1.4">ゆっくり</option>
+        <option value="1" selected>ふつう</option>
+        <option value="0.7">はやい</option>
       </select>
     </label>
 

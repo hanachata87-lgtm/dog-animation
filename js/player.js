@@ -113,37 +113,53 @@ export function createPlayer({ root, canvas, exitBtn, ring, toast }) {
     lastTime = now;
     boost *= Math.exp(-dt / 320);
 
+    const anchor = motion.anchor || 'ground';
     const groundY = drawBackground(now);
     const phase = (((now - startTime) / duration) % 1 + 1) % 1;
     const pose = motion.pose(phase);
 
     // 画面にちょうどよく収まる大きさ
+    // 顔だけの動きは、左右に肉球の手が出るので少し小さめにする
     const hop = cssH * motion.hopHeight * (1 + boost * 0.7);
-    const maxH = cssH * 0.42, maxW = cssW * 0.72;
+    const maxH = cssH * (anchor === 'center' ? 0.40 : 0.42);
+    const maxW = cssW * (anchor === 'center' ? 0.52 : 0.72);
     const scale = Math.min(maxW / image.width, maxH / image.height);
     const w = image.width * scale, h = image.height * scale;
 
     const cx = cssW / 2 + pose.dx * cssW;
-    // タップでよろこんで高く跳んでも、画面の上からはみ出さないようにする
-    const maxLift = Math.max(0, groundY - h * 1.15 - 12);
-    const lift = Math.min(pose.lift * hop, maxLift);
+    let baseY;      // つぶれ／のび の軸になる位置
+    let originY;    // その軸から見た 絵の上はしの位置
+    if (anchor === 'center') {
+      baseY = cssH * 0.46 - pose.lift * hop;
+      originY = -h / 2;
+    } else {
+      // タップでよろこんで高く跳んでも、画面の上からはみ出さないようにする
+      const maxLift = Math.max(0, groundY - h * 1.15 - 12);
+      baseY = groundY - Math.min(pose.lift * hop, maxLift);
+      originY = -h;
 
-    // 影（高く跳ぶほど小さく薄く）
-    ctx.save();
-    ctx.globalAlpha = 0.22 * (1 - pose.lift * 0.7);
-    ctx.fillStyle = '#3b5d2a';
-    ctx.beginPath();
-    ctx.ellipse(cx, groundY + 4, w * 0.32 * (1 - pose.lift * 0.35), w * 0.075, 0, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.restore();
+      // 影（高く跳ぶほど小さく薄く）
+      ctx.save();
+      ctx.globalAlpha = 0.22 * (1 - pose.lift * 0.7);
+      ctx.fillStyle = '#3b5d2a';
+      ctx.beginPath();
+      ctx.ellipse(cx, groundY + 4, w * 0.32 * (1 - pose.lift * 0.35), w * 0.075, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
 
-    // わんちゃん（足もとを軸につぶれ／のび）
+    // わんちゃん
     ctx.save();
-    ctx.translate(cx, groundY - lift);
+    ctx.translate(cx, baseY);
     ctx.rotate(pose.rot);
     ctx.scale(pose.sx, pose.sy);
-    ctx.drawImage(image, -w / 2, -h, w, h);
+    ctx.drawImage(image, -w / 2, originY, w, h);
     ctx.restore();
+
+    // 絵の上に重ねるもの（いないいないばあ の肉球の手など）
+    if (motion.overlay) {
+      motion.overlay(ctx, phase, { cx, cy: baseY + originY + h / 2, w, h, sw: cssW, sh: cssH });
+    }
 
     drawParticles(dt);
   }
@@ -197,7 +213,7 @@ export function createPlayer({ root, canvas, exitBtn, ring, toast }) {
   async function start({ cutout, motionName, speed, onExit }) {
     image = cutout;
     motion = getMotion(motionName);
-    duration = Number(speed) || motion.defaultDuration;
+    duration = motion.defaultDuration * (Number(speed) || 1);   // speed は倍率
     onExitCallback = onExit;
 
     root.hidden = false;
