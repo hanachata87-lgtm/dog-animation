@@ -9,6 +9,8 @@ import { createPlayer } from './player.js';
 import { MOTIONS, motionsForPart } from './motions.js';
 
 const STORE_KEY = 'dogAnim.play.v2';
+const FAV_KEY   = 'dogAnim.favs.v1';
+const FAV_MAX   = 6;
 const OLD_KEY = 'dogAnim.cutout.v1';
 const $ = (id) => document.getElementById(id);
 
@@ -18,7 +20,10 @@ const state = {
   mask: null,       // Uint8Array（0 か 255）
   mw: 0, mh: 0,
   cutout: null,     // 切り抜き後の canvas / img（全身）
-  part: 'body',     // body（ぜんしん）か face（かおだけ）
+  part: 'body',     // body（ぜんしん）/ face（かおだけ）/ chara（かおだけ＋イラストの体）
+  spots: {},        // ゆらす場所 { tail:{x,y,r}, te:{x,y,r} }
+  spotKey: null,    // いま えらんでいる場所の名前
+  playAfterSpot: false,
   face: null,       // かおの丸 { cx, cy, r }（切り抜き画像の中の座標）
   playImage: null,  // じっさいに動かす絵
   mode: 'tap',      // tap | add | erase
@@ -36,6 +41,9 @@ const partCanvas    = $('part-canvas');
 const faceCanvas    = $('face-canvas');
 const faceOverlay   = $('face-overlay');
 const faceOverlayCtx = faceOverlay.getContext('2d');
+const spotCanvas    = $('spot-canvas');
+const spotOverlay   = $('spot-overlay');
+const spotOverlayCtx = spotOverlay.getContext('2d');
 
 const player = createPlayer({
   root: $('player'),
@@ -125,9 +133,16 @@ function layoutFace() {
   fitStage('face-stage', 'face-wrap', [faceCanvas, faceOverlay], state.cutout.width, state.cutout.height);
 }
 
+function layoutSpot() {
+  const img = state.playImage;
+  if (!img) return;
+  fitStage('spot-stage', 'spot-wrap', [spotCanvas, spotOverlay], img.width, img.height);
+}
+
 window.addEventListener('resize', () => {
   if ($('screen-cut').classList.contains('is-active')) { layoutPhoto(); drawPhoto(); }
   if ($('screen-face').classList.contains('is-active')) { layoutFace(); drawFace(); }
+  if ($('screen-spot').classList.contains('is-active')) { layoutSpot(); drawSpot(); }
 });
 
 /* ---------- 写真とマスクを描く ---------- */
@@ -321,16 +336,19 @@ $('btn-to-motion').addEventListener('click', () => {
 $('btn-part-body').addEventListener('click', () => {
   state.part = 'body';
   state.playImage = state.cutout;
+  state.spots = {};
   goMotion();
 });
 
-$('btn-part-face').addEventListener('click', () => {
-  state.part = 'face';
+function goFaceCircle(part) {
+  state.part = part;
   showScreen('screen-face');
   initFaceCircle();
   layoutFace();
   drawFace();
-});
+}
+$('btn-part-face').addEventListener('click', () => goFaceCircle('face'));
+$('btn-part-chara').addEventListener('click', () => goFaceCircle('chara'));
 
 /* ---------- かおの丸あわせ ---------- */
 function initFaceCircle() {
@@ -410,6 +428,8 @@ $('btn-face-ok').addEventListener('click', () => {
 });
 
 /* ---------- 動きをえらぶ ---------- */
+const RANDOM = 'random';
+
 function goMotion() {
   fillMotionSelect(state.part);
   drawInto(previewCanvas, state.playImage, 0.34);
@@ -417,7 +437,7 @@ function goMotion() {
   showScreen('screen-motion');
 }
 
-/** えらんだ写真の種類で使える動きだけをならべる（これからの動きは灰色で見せる） */
+/** えらんだ写真の種類で使える動きだけをならべる */
 function fillMotionSelect(part, keep) {
   const sel = $('motion-select');
   sel.innerHTML = '';
@@ -427,21 +447,23 @@ function fillMotionSelect(part, keep) {
     o.textContent = MOTIONS[name].label;
     sel.appendChild(o);
   }
-  for (const text of ['しっぽふりふり（第3段階でつくります）',
-                      'おてふり（第3段階でつくります）',
-                      'おまかせ（第3段階でつくります）']) {
-    const o = document.createElement('option');
-    o.textContent = text;
-    o.disabled = true;
-    sel.appendChild(o);
-  }
-  if (keep && [...sel.options].some((o) => o.value === keep)) sel.value = keep;
+  const o = document.createElement('option');
+  o.value = RANDOM;
+  o.textContent = '🎲 おまかせ';
+  sel.appendChild(o);
+
+  if (keep && [...sel.options].some((x) => x.value === keep)) sel.value = keep;
   showMotionDesc();
 }
 
 /** えらんでいる動きの説明を、ドロップダウンの下に出す */
 function showMotionDesc() {
-  const m = MOTIONS[$('motion-select').value];
+  const v = $('motion-select').value;
+  if (v === RANDOM) {
+    $('motion-desc').textContent = '［あそぶ］を押すたびに、動き・はやさ・ゆらす場所が ランダムに変わります。';
+    return;
+  }
+  const m = MOTIONS[v];
   $('motion-desc').textContent = m ? m.desc : '';
 }
 $('motion-select').addEventListener('change', showMotionDesc);
@@ -458,17 +480,130 @@ function drawInto(canvas, img, maxHeightRatio) {
   canvas.getContext('2d').drawImage(img, 0, 0);
 }
 
+/* ---------- ゆらす場所をえらぶ（しっぽふりふり・おてふり） ---------- */
+function openSpot(motionName, playAfter) {
+  const m = MOTIONS[motionName];
+  state.spotKey = m.needsSpot;
+  state.playAfterSpot = !!playAfter;
+  $('spot-title').textContent = m.label;
+  $('spot-hint').textContent = m.spotHint;
+
+  const img = state.playImage;
+  if (!state.spots[state.spotKey]) {
+    // しっぽは体のうしろがわ、前足は下のほうにあることが多い
+    const back = state.spotKey === 'tail';
+    state.spots[state.spotKey] = {
+      x: img.width * (back ? 0.82 : 0.28),
+      y: img.height * (back ? 0.45 : 0.80),
+      r: Math.max(img.width, img.height) * 0.26,
+    };
+  }
+  $('spot-size').value = String(spotToSlider(state.spots[state.spotKey].r));
+  showScreen('screen-spot');
+  layoutSpot();
+  drawSpot();
+}
+
+const spotMaxR = () => Math.max(state.playImage.width, state.playImage.height);
+const sliderToSpot = (v) => (Number(v) / 100) * spotMaxR();
+const spotToSlider = (r) => Math.max(8, Math.min(70, Math.round(r / spotMaxR() * 100)));
+
+function drawSpot() {
+  const img = state.playImage;
+  const spot = state.spots[state.spotKey];
+  if (!img || !spot) return;
+  const sc = spotCanvas.getContext('2d');
+  sc.clearRect(0, 0, img.width, img.height);
+  sc.drawImage(img, 0, 0);
+
+  const g = spotOverlayCtx;
+  g.clearRect(0, 0, img.width, img.height);
+  g.fillStyle = 'rgba(20,10,20,.55)';
+  g.fillRect(0, 0, img.width, img.height);
+  g.globalCompositeOperation = 'destination-out';
+  g.beginPath(); g.arc(spot.x, spot.y, spot.r, 0, Math.PI * 2); g.fill();
+  g.globalCompositeOperation = 'source-over';
+  g.strokeStyle = '#fff';
+  g.lineWidth = Math.max(2, img.width * 0.006);
+  g.beginPath(); g.arc(spot.x, spot.y, spot.r, 0, Math.PI * 2); g.stroke();
+}
+
+let spotDragging = false;
+function moveSpot(e) {
+  const img = state.playImage;
+  const rect = spotCanvas.getBoundingClientRect();
+  const spot = state.spots[state.spotKey];
+  spot.x = Math.max(0, Math.min(img.width,  (e.clientX - rect.left) / rect.width  * img.width));
+  spot.y = Math.max(0, Math.min(img.height, (e.clientY - rect.top)  / rect.height * img.height));
+  drawSpot();
+}
+spotOverlay.addEventListener('pointerdown', (e) => {
+  e.preventDefault(); spotDragging = true;
+  spotOverlay.setPointerCapture(e.pointerId);
+  moveSpot(e);
+});
+spotOverlay.addEventListener('pointermove', (e) => { if (spotDragging) { e.preventDefault(); moveSpot(e); } });
+spotOverlay.addEventListener('pointerup',     () => { spotDragging = false; });
+spotOverlay.addEventListener('pointercancel', () => { spotDragging = false; });
+spotOverlay.addEventListener('touchstart', (e) => e.preventDefault(), { passive: false });
+spotOverlay.addEventListener('touchmove',  (e) => e.preventDefault(), { passive: false });
+
+$('spot-size').addEventListener('input', (e) => {
+  const spot = state.spots[state.spotKey];
+  if (!spot) return;
+  spot.r = sliderToSpot(e.target.value);
+  drawSpot();
+});
+
+$('btn-spot-ok').addEventListener('click', () => {
+  savePlay();
+  if (state.playAfterSpot) { state.playAfterSpot = false; play(); }
+  else showScreen('screen-motion');
+});
+
+$('btn-back-motion').addEventListener('click', () => {
+  state.playAfterSpot = false;
+  showScreen('screen-motion');
+});
+
 /* ---------- 再生 ---------- */
-$('btn-play').addEventListener('click', () => {
+/** 「おまかせ」のときは、動き・はやさ・ゆらす場所をその場でくじ引きする */
+function pickMotion() {
+  const chosen = $('motion-select').value;
+  if (chosen !== RANDOM) {
+    const m = MOTIONS[chosen];
+    return { name: chosen, speed: $('speed-select').value,
+             spot: m.needsSpot ? state.spots[m.needsSpot] : null };
+  }
+  const pool = motionsForPart(state.part)
+    .filter((k) => !MOTIONS[k].needsSpot || state.spots[MOTIONS[k].needsSpot]);
+  const name = pool.length ? pool[(Math.random() * pool.length) | 0] : 'pyoko';
+  const speeds = ['1.4', '1', '0.7'];
+  // ゆらす場所も、決めてあるものの中からくじ引き
+  const keys = Object.keys(state.spots);
+  const spot = MOTIONS[name].needsSpot && keys.length
+    ? state.spots[keys[(Math.random() * keys.length) | 0]]
+    : null;
+  return { name, speed: speeds[(Math.random() * speeds.length) | 0], spot };
+}
+
+function play() {
   if (!state.playImage) return;
+  const pick = pickMotion();
+  const m = MOTIONS[pick.name];
+  if (m.needsSpot && !pick.spot) { openSpot(pick.name, true); return; }
+
   savePlay();
   player.start({
     cutout: state.playImage,
-    motionName: $('motion-select').value,
-    speed: $('speed-select').value,
+    motionName: pick.name,
+    speed: pick.speed,
+    part: state.part,
+    spot: pick.spot,
     onExit: () => showScreen('screen-motion'),
   });
-});
+}
+$('btn-play').addEventListener('click', play);
 
 /* ---------- もどる ---------- */
 $('btn-back-start').addEventListener('click', () => showScreen('screen-start'));
@@ -479,48 +614,148 @@ $('btn-back-cut2').addEventListener('click', () => {
 $('btn-back-part').addEventListener('click', () => showScreen('screen-part'));
 $('btn-back-part2').addEventListener('click', () => {
   if (!state.cutout) { showScreen('screen-start'); return; }
-  if (state.part === 'face') { showScreen('screen-face'); layoutFace(); drawFace(); }
+  if (state.part !== 'body') { showScreen('screen-face'); layoutFace(); drawFace(); }
   else showScreen('screen-part');
 });
 
 /* ---------- 前回のわんちゃんを覚えておく（この端末の中だけ） ---------- */
+/** 絵を小さくして dataURL にする（保存する量をおさえるため） */
+function toDataURL(img, maxSide) {
+  const s = Math.min(1, maxSide / Math.max(img.width, img.height));
+  const small = document.createElement('canvas');
+  small.width  = Math.max(1, Math.round(img.width  * s));
+  small.height = Math.max(1, Math.round(img.height * s));
+  small.getContext('2d').drawImage(img, 0, 0, small.width, small.height);
+  return { url: small.toDataURL('image/png'), scale: s };
+}
+
+/** ゆらす場所は絵の大きさに合わせて縮める必要があるので、割合で持ちかえる */
+const spotsToRatio = (spots, img) => {
+  const out = {};
+  for (const k of Object.keys(spots)) {
+    out[k] = { x: spots[k].x / img.width, y: spots[k].y / img.height,
+               r: spots[k].r / Math.max(img.width, img.height) };
+  }
+  return out;
+};
+const spotsFromRatio = (ratios, img) => {
+  const out = {};
+  for (const k of Object.keys(ratios || {})) {
+    out[k] = { x: ratios[k].x * img.width, y: ratios[k].y * img.height,
+               r: ratios[k].r * Math.max(img.width, img.height) };
+  }
+  return out;
+};
+
+function currentRecord(maxSide = 512) {
+  const img = state.playImage;
+  if (!img) return null;
+  return {
+    img: toDataURL(img, maxSide).url,
+    part: state.part,
+    motion: $('motion-select').value,
+    speed: $('speed-select').value,
+    spots: spotsToRatio(state.spots, img),
+  };
+}
+
 function savePlay() {
   try {
-    const img = state.playImage;
-    if (!img) return;
-    const s = Math.min(1, 512 / Math.max(img.width, img.height));
-    const small = document.createElement('canvas');
-    small.width  = Math.max(1, Math.round(img.width  * s));
-    small.height = Math.max(1, Math.round(img.height * s));
-    small.getContext('2d').drawImage(img, 0, 0, small.width, small.height);
-    localStorage.setItem(STORE_KEY, JSON.stringify({
-      img: small.toDataURL('image/png'),
-      part: state.part,
-      motion: $('motion-select').value,
-      speed: $('speed-select').value,
-    }));
+    const rec = currentRecord(512);
+    if (rec) localStorage.setItem(STORE_KEY, JSON.stringify(rec));
     localStorage.removeItem(OLD_KEY);
   } catch { /* 保存できなくても動作には影響しない */ }
+}
+
+/** 保存しておいた1件を読みこんで、動きえらび画面をひらく */
+function applyRecord(rec) {
+  const img = new Image();
+  img.onload = () => {
+    state.playImage = img;
+    state.part = ['face', 'chara'].includes(rec.part) ? rec.part : 'body';
+    state.spots = spotsFromRatio(rec.spots, img);
+    fillMotionSelect(state.part, rec.motion);
+    if (rec.speed) $('speed-select').value = rec.speed;
+    drawInto(previewCanvas, img, 0.34);
+    showScreen('screen-motion');
+  };
+  img.src = rec.img;
 }
 
 (function restore() {
   let saved = null;
   try { saved = JSON.parse(localStorage.getItem(STORE_KEY) || 'null'); } catch {}
   if (!saved || !saved.img) return;
-  const img = new Image();
-  img.onload = () => {
-    state.playImage = img;
-    state.part = saved.part === 'face' ? 'face' : 'body';
-    $('btn-resume').hidden = false;
-    $('btn-resume').addEventListener('click', () => {
-      fillMotionSelect(state.part, saved.motion);
-      if (saved.speed) $('speed-select').value = saved.speed;
-      drawInto(previewCanvas, img, 0.34);
-      showScreen('screen-motion');
-    });
-  };
-  img.src = saved.img;
+  $('btn-resume').hidden = false;
+  $('btn-resume').addEventListener('click', () => applyRecord(saved));
 })();
+
+/* ---------- おきにいり ---------- */
+function loadFavs() {
+  try { return JSON.parse(localStorage.getItem(FAV_KEY) || '[]'); } catch { return []; }
+}
+
+function storeFavs(favs) {
+  try {
+    localStorage.setItem(FAV_KEY, JSON.stringify(favs));
+    return true;
+  } catch {
+    // いっぱいのときは 古いものから消して もう一度ためす
+    if (favs.length > 1) return storeFavs(favs.slice(1));
+    return false;
+  }
+}
+
+$('btn-fav').addEventListener('click', () => {
+  const rec = currentRecord(360);
+  if (!rec) return;
+  const label = rec.motion === RANDOM ? '🎲 おまかせ' : (MOTIONS[rec.motion] || {}).label || '';
+  const favs = loadFavs();
+  favs.push({ ...rec, label, id: Date.now() });
+  while (favs.length > FAV_MAX) favs.shift();
+  if (storeFavs(favs)) {
+    renderFavs();
+    alertBox('おきにいりに入れました。つぎからは さいしょの画面から すぐあそべます。');
+  } else {
+    alertBox('この端末のあきがなくて、保存できませんでした。');
+  }
+});
+
+function renderFavs() {
+  const favs = loadFavs();
+  const row = $('fav-row');
+  row.innerHTML = '';
+  $('fav-area').hidden = favs.length === 0;
+
+  for (const fav of favs.slice().reverse()) {
+    const btn = document.createElement('button');
+    btn.className = 'fav';
+    btn.type = 'button';
+    btn.innerHTML = `<img alt=""><span></span>`;
+    btn.querySelector('img').src = fav.img;
+    btn.querySelector('span').textContent = fav.label || '';
+
+    // ふつうに押す＝あそぶ、長おし＝けす（子どもが まちがえて消さないように）
+    let timer = 0, held = false;
+    const cancel = () => { clearTimeout(timer); };
+    btn.addEventListener('pointerdown', () => {
+      held = false;
+      timer = setTimeout(() => {
+        held = true;
+        if (confirm('このおきにいりを けしますか？')) {
+          storeFavs(loadFavs().filter((f) => f.id !== fav.id));
+          renderFavs();
+        }
+      }, 800);
+    });
+    btn.addEventListener('pointerup', cancel);
+    btn.addEventListener('pointercancel', cancel);
+    btn.addEventListener('pointerleave', cancel);
+    btn.addEventListener('click', () => { if (!held) applyRecord(fav); });
+    row.appendChild(btn);
+  }
+}
+renderFavs();
 
 /* ---------- ページ全体のズーム・長押しメニューをおさえる ---------- */
 document.addEventListener('gesturestart', (e) => e.preventDefault());

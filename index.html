@@ -25,6 +25,12 @@
 
     <button class="btn btn-ghost" id="btn-resume" hidden>まえのわんちゃんで あそぶ</button>
 
+    <section class="fav-area" id="fav-area" hidden>
+      <h2 class="fav-label">⭐ おきにいり</h2>
+      <div class="fav-row" id="fav-row"></div>
+      <p class="hint">長おしすると けせます。</p>
+    </section>
+
     <p class="hint" id="start-hint">はじめてのときは、犬がはっきり写っている明るい写真がおすすめです。</p>
   </div>
 </section>
@@ -71,7 +77,12 @@
     <div class="preview-box"><canvas id="part-canvas"></canvas></div>
     <button class="btn btn-primary btn-huge" id="btn-part-body">🐕 ぜんしん</button>
     <button class="btn btn-primary btn-huge" id="btn-part-face">😀 かおだけ</button>
-    <p class="hint">「かおだけ」をえらぶと〈いないいないばあ〉であそべます。</p>
+    <button class="btn btn-primary btn-huge" id="btn-part-chara">🕺 かおだけ＋イラストの体</button>
+    <p class="hint">
+      <b>ぜんしん</b>… ぴょこぴょこ／しっぽふりふり／おてふり<br>
+      <b>かおだけ</b>… 肉球の手で いないいないばあ<br>
+      <b>かおだけ＋イラストの体</b>… 犬の顔に マンガの体がついて、ウェーイ！と おどります
+    </p>
   </div>
 </section>
 
@@ -99,7 +110,31 @@
   </div>
 </section>
 
-<!-- ========== 5. 動きをえらぶ画面 ========== -->
+<!-- ========== 5. ゆらす場所をえらぶ画面 ========== -->
+<section class="screen" id="screen-spot">
+  <header class="bar">
+    <button class="btn btn-small btn-ghost" id="btn-back-motion">もどる</button>
+    <span class="bar-title" id="spot-title">ゆらす場所をえらぶ</span>
+  </header>
+
+  <div class="stage" id="spot-stage">
+    <div class="canvas-wrap" id="spot-wrap">
+      <canvas id="spot-canvas"></canvas>
+      <canvas id="spot-overlay" class="overlay"></canvas>
+    </div>
+  </div>
+
+  <div class="tools">
+    <label class="slider-row">
+      <span>ゆらす広さ</span>
+      <input type="range" id="spot-size" min="8" max="70" value="26">
+    </label>
+    <p class="hint" id="spot-hint">ゆらしたいところを タップしてね</p>
+    <button class="btn btn-primary btn-huge" id="btn-spot-ok">これでOK →</button>
+  </div>
+</section>
+
+<!-- ========== 6. 動きをえらぶ画面 ========== -->
 <section class="screen" id="screen-motion">
   <header class="bar">
     <button class="btn btn-small btn-ghost" id="btn-back-part2">もどる</button>
@@ -125,6 +160,7 @@
     </label>
 
     <button class="btn btn-primary btn-huge" id="btn-play">▶ ぜんがめんで あそぶ</button>
+    <button class="btn btn-ghost" id="btn-fav">⭐ おきにいりに 入れる</button>
     <p class="hint">
       再生中は画面をさわっても止まりません（さわると わんちゃんが よろこびます）。<br>
       おわるときは、<b>右上のボタンを2.5秒ながおし</b>してください。
