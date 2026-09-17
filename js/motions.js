@@ -52,8 +52,9 @@ function pyokoRig(p) {
     hipShift: 0,
     arms: [{ angles: [DOWN + 0.35 + 0.85 * air, DOWN + 0.32 + 0.70 * air] },
            { angles: [DOWN - 0.35 - 0.85 * air, DOWN - 0.32 - 0.70 * air] }],
-    legs: [{ angles: [DOWN + 0.12 + 0.45 * ground, DOWN + 0.06 - 0.60 * ground] },
-           { angles: [DOWN - 0.12 - 0.45 * ground, DOWN - 0.06 + 0.60 * ground] }],
+    // 付け根は体についたまま、ひざから先が外へ開いて しゃがむ
+    legs: [{ angles: [DOWN + 0.09 + 0.16 * ground, DOWN + 0.16 + 0.55 * ground] },
+           { angles: [DOWN - 0.09 - 0.16 * ground, DOWN - 0.16 - 0.55 * ground] }],
   };
 }
 
@@ -156,8 +157,8 @@ function peekabooBodyRig(p) {
     hipShift: wig * 1.2,
     handScale: scale,
     arms: [{ to: left }, { to: right }],
-    legs: [{ angles: [DOWN + 0.12 + 0.30 * bounce, DOWN + 0.06 - 0.40 * bounce] },
-           { angles: [DOWN - 0.12 - 0.30 * bounce, DOWN - 0.06 + 0.40 * bounce] }],
+    legs: [{ angles: [DOWN + 0.08 + 0.12 * bounce, DOWN + 0.16 + 0.40 * bounce] },
+           { angles: [DOWN - 0.08 - 0.12 * bounce, DOWN - 0.16 - 0.40 * bounce] }],
   };
 }
 
@@ -207,15 +208,14 @@ function waywayRig(p) {
 
   const sway = Math.sin(p * TAU);
   const hit = 1 - snap;
-  const kick = leftUp ? 1 : -1;
+  // あしの付け根は体についたまま、足先だけ「ハの字」に 開く→とじる をくり返す
+  const open = (1 - Math.cos(p * TAU * 2)) / 2;
+  const bend = 0.20 * hit;
   return {
-    hipShift: sway * 0.30,
+    hipShift: sway * 0.26,
     arms,
-    // 片あしずつ 交互に ちょっと外へ けり出す
-    legs: [{ angles: [DOWN + 0.14 + 0.30 * hit + (kick > 0 ? 0.28 : 0),
-                      DOWN + 0.08 - 0.34 * hit] },
-           { angles: [DOWN - 0.14 - 0.30 * hit - (kick < 0 ? 0.28 : 0),
-                      DOWN - 0.08 + 0.34 * hit] }],
+    legs: [{ angles: [DOWN + 0.05 + 0.08 * open + bend, DOWN + 0.14 + 0.60 * open - bend * 1.5] },
+           { angles: [DOWN - 0.05 - 0.08 * open - bend, DOWN - 0.14 - 0.60 * open + bend * 1.5] }],
   };
 }
 
@@ -241,6 +241,7 @@ export const MOTIONS = {
     anchor: 'ground',
     pose: pyokoPose,
     rig: pyokoRig,
+    defaultTravel: 'bounce',
     hopHeight: 0.30,
     defaultDuration: 800,
   },
@@ -251,6 +252,7 @@ export const MOTIONS = {
     anchor: 'center',
     pose: peekabooPose,
     overlay: peekabooOverlay,
+    defaultTravel: 'none',
     hopHeight: 0.10,
     defaultDuration: 2400,
   },
@@ -261,6 +263,7 @@ export const MOTIONS = {
     anchor: 'ground',
     pose: waywayPose,
     rig: waywayRig,
+    defaultTravel: 'run',
     hopHeight: 0.12,
     defaultDuration: 1000,
   },
@@ -272,6 +275,7 @@ export const MOTIONS = {
     pose: peekabooPose,
     rig: peekabooBodyRig,
     overlay: peekabooBodyOverlay,
+    defaultTravel: 'none',
     hopHeight: 0.10,
     defaultDuration: 2400,
   },
@@ -284,6 +288,7 @@ export const MOTIONS = {
     needsSpot: 'tail',
     spotHint: 'しっぽの まん中あたりを タップしてね',
     wiggle: (p) => Math.sin(p * TAU) * 0.34,
+    defaultTravel: 'run',
     hopHeight: 0.035,
     defaultDuration: 520,
   },
@@ -296,6 +301,7 @@ export const MOTIONS = {
     needsSpot: 'te',
     spotHint: '前足（おてする手）を タップしてね',
     wiggle: (p) => Math.sin(p * TAU) * 0.42,
+    defaultTravel: 'run',
     hopHeight: 0.03,
     defaultDuration: 700,
   },

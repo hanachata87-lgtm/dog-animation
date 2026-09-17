@@ -9,6 +9,7 @@
 import { getMotion } from './motions.js';
 import { drawBodyBack, drawBodyFront, BODY_HEIGHT } from './body.js';
 import { buildWiggle } from './wiggle.js';
+import { createTravel } from './travel.js';
 
 const HOLD_MS   = 2500;   // 大人だけができるながおしの時間
 const RING_LEN  = 2 * Math.PI * 20;
@@ -26,6 +27,7 @@ export function createPlayer({ root, canvas, exitBtn, ring, toast }) {
   let boost = 0;                 // タップしたときの「もっと高くはねる」量
   let part = 'body';             // body / face / chara
   let wiggleData = null;         // しっぽ・前足をゆらすための絵（使うときだけ）
+  let travel = createTravel('none');  // 画面のどこを動きまわるか
   let particles = [];
   let rafId = 0;
   let wakeLock = null;
@@ -122,39 +124,62 @@ export function createPlayer({ root, canvas, exitBtn, ring, toast }) {
     const pose = motion.pose(phase);
     const hop = cssH * motion.hopHeight * (1 + boost * 0.7);
 
-    if (part === 'chara' && motion.rig) drawCharacter(phase, pose, hop);
-    else drawPlainDog(phase, pose, hop, groundY);
+    // 先に「どれくらいの大きさで描くか」を決め、それを見て動きまわる位置を計算する
+    const isChara = part === 'chara' && !!motion.rig;
+    const m = isChara ? charaMetrics() : plainMetrics();
+    const tr = travel.step(dt, cssW, cssH, m.w, m.h);
+    if (isChara) drawCharacter(phase, pose, hop, groundY, m, tr);
+    else drawPlainDog(phase, pose, hop, groundY, m, tr);
 
     drawParticles(dt);
   }
 
-  /* ---------- 写真そのものを動かす（ぜんしん・かおだけ） ---------- */
-  function drawPlainDog(phase, pose, hop, groundY) {
+  /** 動きまわるときは、画面のはしまで行けるように 少し小さめに描く */
+  const roomFactor = () => (travel.mode === 'none' ? 1 : 0.78);
+
+  function plainMetrics() {
     const anchor = motion.anchor || 'ground';
     // 顔だけの動きは、左右に肉球の手が出るので少し小さめにする
-    const maxH = cssH * (anchor === 'center' ? 0.40 : 0.42);
-    const maxW = cssW * (anchor === 'center' ? 0.52 : 0.72);
+    const maxH = cssH * (anchor === 'center' ? 0.40 : 0.42) * roomFactor();
+    const maxW = cssW * (anchor === 'center' ? 0.52 : 0.72) * roomFactor();
     const scale = Math.min(maxW / image.width, maxH / image.height);
-    const w = image.width * scale, h = image.height * scale;
+    return { anchor, w: image.width * scale, h: image.height * scale };
+  }
 
-    const cx = cssW / 2 + pose.dx * cssW;
+  function charaMetrics() {
+    const hs = Math.min(cssH * 0.34, cssW * 0.44) * roomFactor();
+    const s = hs * 0.5;
+    const bodyH = BODY_HEIGHT * s;
+    // 頭のてっぺんから つま先まで
+    return { hs, s, bodyH, w: hs * 1.9, h: hs * 0.98 + bodyH };
+  }
+
+  /* ---------- 写真そのものを動かす（ぜんしん・かおだけ） ---------- */
+  function drawPlainDog(phase, pose, hop, groundY, m, tr) {
+    const { anchor, w, h } = m;
+    const cx = tr.x != null ? tr.x : cssW / 2 + pose.dx * cssW;
     let baseY;      // つぶれ／のび の軸になる位置
     let originY;    // その軸から見た 絵の上はしの位置
+
     if (anchor === 'center') {
-      baseY = cssH * 0.46 - pose.lift * hop;
       originY = -h / 2;
+      baseY = tr.y != null ? tr.y : cssH * 0.46 - pose.lift * hop;
     } else {
-      // タップでよろこんで高く跳んでも、画面の上からはみ出さないようにする
-      const maxLift = Math.max(0, groundY - h * 1.15 - 12);
-      baseY = groundY - Math.min(pose.lift * hop, maxLift);
       originY = -h;
-      drawShadow(cx, groundY, w * 0.32, pose.lift);
+      if (tr.y != null) {
+        baseY = tr.y + h / 2;            // tr.y は まん中なので、足もとに直す
+      } else {
+        // タップでよろこんで高く跳んでも、画面の上からはみ出さないようにする
+        const maxLift = Math.max(0, groundY - h * 1.15 - 12);
+        baseY = groundY - Math.min(pose.lift * hop, maxLift);
+      }
+      drawGroundShadow(cx, groundY, w * 0.32, baseY);
     }
 
     ctx.save();
     ctx.translate(cx, baseY);
-    ctx.rotate(pose.rot);
-    ctx.scale(pose.sx, pose.sy);
+    ctx.rotate(pose.rot + tr.spin);
+    ctx.scale(pose.sx * tr.flip, pose.sy);
     if (wiggleData && motion.wiggle) {
       // ゆらす場所いがいを先に描き、そのあと その場所だけを 付け根を軸にゆらす
       ctx.drawImage(wiggleData.base, -w / 2, originY, w, h);
@@ -177,20 +202,22 @@ export function createPlayer({ root, canvas, exitBtn, ring, toast }) {
   }
 
   /* ---------- 顔に イラストの体をつけて動かす ---------- */
-  function drawCharacter(phase, pose, hop) {
-    const hs = Math.min(cssH * 0.34, cssW * 0.44);   // 顔の大きさ
-    const s = hs * 0.5;                              // 体の基本の長さ（＝顔の半径）
-    const footY = cssH * 0.88;
-    const bob = pose.lift * hop;
-    const neckX = cssW / 2 + (pose.dx || 0) * cssW;
-    const neckY = footY - BODY_HEIGHT * s - bob;
+  function drawCharacter(phase, pose, hop, groundY, m, tr) {
+    const { hs, s, bodyH } = m;
+    const footY0 = cssH * 0.88;
+    const neckX = tr.x != null ? tr.x : cssW / 2 + (pose.dx || 0) * cssW;
+    const neckY = tr.y != null
+      ? tr.y - (bodyH - hs * 0.98) / 2          // tr.y は 体ぜんたいの まん中
+      : footY0 - bodyH - pose.lift * hop;
     const hw = image.width * (hs / image.height);
     const rig = motion.rig(phase);
 
-    drawShadow(neckX, footY + s * 0.30, s * 0.80, pose.lift);
+    drawGroundShadow(neckX, footY0 + s * 0.30, s * 0.80, neckY + bodyH);
 
     ctx.save();
     ctx.translate(neckX, neckY);
+    ctx.rotate(tr.spin);
+    ctx.scale(tr.flip, 1);
     drawBodyBack(ctx, s, rig);
 
     // 顔（首のところを軸にかたむける）
@@ -211,13 +238,14 @@ export function createPlayer({ root, canvas, exitBtn, ring, toast }) {
     }
   }
 
-  /** 地面の影（高く上がるほど 小さく うすく） */
-  function drawShadow(x, y, radius, lift) {
+  /** 地面の影。高く上がっているほど 小さく うすくなる */
+  function drawGroundShadow(x, groundY, radius, bottomY) {
+    const above = Math.max(0, Math.min(1, (groundY - bottomY) / (cssH * 0.45)));
     ctx.save();
-    ctx.globalAlpha = 0.22 * (1 - Math.max(0, lift) * 0.7);
+    ctx.globalAlpha = 0.22 * (1 - above * 0.75);
     ctx.fillStyle = '#3b5d2a';
     ctx.beginPath();
-    ctx.ellipse(x, y, radius * (1 - Math.max(0, lift) * 0.35), radius * 0.24, 0, 0, Math.PI * 2);
+    ctx.ellipse(x, groundY, radius * (1 - above * 0.40), radius * 0.24, 0, 0, Math.PI * 2);
     ctx.fill();
     ctx.restore();
   }
@@ -268,11 +296,12 @@ export function createPlayer({ root, canvas, exitBtn, ring, toast }) {
   /* ---------- 開始・終了 ---------- */
   let onExitCallback = null;
 
-  async function start({ cutout, motionName, speed, part: partName, spot, onExit }) {
+  async function start({ cutout, motionName, speed, part: partName, spot, travel: travelKind, onExit }) {
     image = cutout;
     motion = getMotion(motionName);
     part = partName || 'body';
     wiggleData = (motion.wiggle && spot) ? buildWiggle(cutout, spot) : null;
+    travel = createTravel(travelKind || motion.defaultTravel || 'none');
     duration = motion.defaultDuration * (Number(speed) || 1);   // speed は倍率
     onExitCallback = onExit;
 

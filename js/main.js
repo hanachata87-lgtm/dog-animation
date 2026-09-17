@@ -7,6 +7,7 @@ import { loadSegmenter, segmentAt } from './segmenter.js';
 import { loadPhotoToCanvas, maskFromLabels, paintCircle, buildCutout, buildFaceCrop } from './cutout.js';
 import { createPlayer } from './player.js';
 import { MOTIONS, motionsForPart } from './motions.js';
+import { TRAVELS } from './travel.js';
 
 const STORE_KEY = 'dogAnim.play.v2';
 const FAV_KEY   = 'dogAnim.favs.v1';
@@ -431,7 +432,8 @@ $('btn-face-ok').addEventListener('click', () => {
 const RANDOM = 'random';
 
 function goMotion() {
-  fillMotionSelect(state.part);
+  const chosen = fillMotionSelect(state.part);
+  fillTravelSelect((MOTIONS[chosen] || {}).defaultTravel || 'none');
   drawInto(previewCanvas, state.playImage, 0.34);
   savePlay();
   showScreen('screen-motion');
@@ -454,19 +456,52 @@ function fillMotionSelect(part, keep) {
 
   if (keep && [...sel.options].some((x) => x.value === keep)) sel.value = keep;
   showMotionDesc();
+  return sel.value;
 }
 
 /** えらんでいる動きの説明を、ドロップダウンの下に出す */
 function showMotionDesc() {
   const v = $('motion-select').value;
   if (v === RANDOM) {
-    $('motion-desc').textContent = '［あそぶ］を押すたびに、動き・はやさ・ゆらす場所が ランダムに変わります。';
+    $('motion-desc').textContent = '［あそぶ］を押すたびに、動き・動きまわりかた・はやさ・ゆらす場所が ランダムに変わります。';
     return;
   }
   const m = MOTIONS[v];
   $('motion-desc').textContent = m ? m.desc : '';
 }
-$('motion-select').addEventListener('change', showMotionDesc);
+
+/* ---------- どこを動きまわるか ---------- */
+function fillTravelSelect(keep) {
+  const sel = $('travel-select');
+  sel.innerHTML = '';
+  for (const key of Object.keys(TRAVELS)) {
+    const o = document.createElement('option');
+    o.value = key;
+    o.textContent = TRAVELS[key].label;
+    sel.appendChild(o);
+  }
+  const o = document.createElement('option');
+  o.value = RANDOM;
+  o.textContent = '🎲 おまかせ';
+  sel.appendChild(o);
+  if (keep && [...sel.options].some((x) => x.value === keep)) sel.value = keep;
+  showTravelDesc();
+}
+
+function showTravelDesc() {
+  const v = $('travel-select').value;
+  $('travel-desc').textContent = v === RANDOM
+    ? '［あそぶ］を押すたびに、動きまわりかたが変わります。'
+    : (TRAVELS[v] || {}).desc || '';
+}
+$('travel-select').addEventListener('change', showTravelDesc);
+
+/** 動きを変えたら、その動きに合う 動きまわりかた にそろえる */
+$('motion-select').addEventListener('change', () => {
+  showMotionDesc();
+  const m = MOTIONS[$('motion-select').value];
+  if (m) { $('travel-select').value = m.defaultTravel || 'none'; showTravelDesc(); }
+});
 
 /** canvas に絵をおさめて表示する（プレビュー用） */
 function drawInto(canvas, img, maxHeightRatio) {
@@ -569,22 +604,28 @@ $('btn-back-motion').addEventListener('click', () => {
 /* ---------- 再生 ---------- */
 /** 「おまかせ」のときは、動き・はやさ・ゆらす場所をその場でくじ引きする */
 function pickMotion() {
+  const pick = (arr) => arr[(Math.random() * arr.length) | 0];
+  const travelKeys = Object.keys(TRAVELS);
+  const chosenTravel = $('travel-select').value;
   const chosen = $('motion-select').value;
+
   if (chosen !== RANDOM) {
     const m = MOTIONS[chosen];
-    return { name: chosen, speed: $('speed-select').value,
-             spot: m.needsSpot ? state.spots[m.needsSpot] : null };
+    return {
+      name: chosen,
+      speed: $('speed-select').value,
+      spot: m.needsSpot ? state.spots[m.needsSpot] : null,
+      travel: chosenTravel === RANDOM ? pick(travelKeys) : chosenTravel,
+    };
   }
+
+  // おまかせ：動き・はやさ・ゆらす場所・動きまわりかた を ぜんぶ引き直す
   const pool = motionsForPart(state.part)
     .filter((k) => !MOTIONS[k].needsSpot || state.spots[MOTIONS[k].needsSpot]);
-  const name = pool.length ? pool[(Math.random() * pool.length) | 0] : 'pyoko';
-  const speeds = ['1.4', '1', '0.7'];
-  // ゆらす場所も、決めてあるものの中からくじ引き
+  const name = pool.length ? pick(pool) : 'pyoko';
   const keys = Object.keys(state.spots);
-  const spot = MOTIONS[name].needsSpot && keys.length
-    ? state.spots[keys[(Math.random() * keys.length) | 0]]
-    : null;
-  return { name, speed: speeds[(Math.random() * speeds.length) | 0], spot };
+  const spot = MOTIONS[name].needsSpot && keys.length ? state.spots[pick(keys)] : null;
+  return { name, speed: pick(['1.4', '1', '0.7']), spot, travel: pick(travelKeys) };
 }
 
 function play() {
@@ -600,6 +641,7 @@ function play() {
     speed: pick.speed,
     part: state.part,
     spot: pick.spot,
+    travel: pick.travel,
     onExit: () => showScreen('screen-motion'),
   });
 }
@@ -654,6 +696,7 @@ function currentRecord(maxSide = 512) {
     img: toDataURL(img, maxSide).url,
     part: state.part,
     motion: $('motion-select').value,
+    travel: $('travel-select').value,
     speed: $('speed-select').value,
     spots: spotsToRatio(state.spots, img),
   };
@@ -675,6 +718,7 @@ function applyRecord(rec) {
     state.part = ['face', 'chara'].includes(rec.part) ? rec.part : 'body';
     state.spots = spotsFromRatio(rec.spots, img);
     fillMotionSelect(state.part, rec.motion);
+    fillTravelSelect(rec.travel || (MOTIONS[rec.motion] || {}).defaultTravel || 'none');
     if (rec.speed) $('speed-select').value = rec.speed;
     drawInto(previewCanvas, img, 0.34);
     showScreen('screen-motion');
@@ -709,7 +753,9 @@ function storeFavs(favs) {
 $('btn-fav').addEventListener('click', () => {
   const rec = currentRecord(360);
   if (!rec) return;
-  const label = rec.motion === RANDOM ? '🎲 おまかせ' : (MOTIONS[rec.motion] || {}).label || '';
+  const icon = (TRAVELS[rec.travel] || {}).icon || (rec.travel === RANDOM ? '🎲' : '');
+  const base = rec.motion === RANDOM ? '🎲 おまかせ' : (MOTIONS[rec.motion] || {}).label || '';
+  const label = (base + ' ' + icon).trim();
   const favs = loadFavs();
   favs.push({ ...rec, label, id: Date.now() });
   while (favs.length > FAV_MAX) favs.shift();

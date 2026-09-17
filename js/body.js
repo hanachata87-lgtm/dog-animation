@@ -173,9 +173,9 @@ export function drawBodyFront(ctx, s, rig) {
     stroke3(ctx, from, elbow, hand, PROP.limbW * s * 1.05 + s * 0.04, FUR_EDGE);
     stroke3(ctx, from, elbow, hand, PROP.limbW * s, FUR);
 
-    // 手（肉球の手）
+    // 手（肉球の手）。指は うでの先の向きに そろえる
     const handR = (rig.handScale || 1) * PROP.hand * s;
-    drawPaw(ctx, hand.x, hand.y, handR, b - Math.PI / 2);
+    drawPaw(ctx, hand.x, hand.y, handR, b + Math.PI / 2);
   }
 
   // そで（シャツの肩）
