@@ -488,6 +488,18 @@ function fillTravelSelect(keep) {
   showTravelDesc();
 }
 
+/* ---------- さわったときの反応 ---------- */
+const TAP_DESC = {
+  dog:     'さわったところに わんちゃんが 出てきます。さわるほど どんどん ふえます。',
+  sparkle: 'さわったところに キラキラが とびちります。',
+  both:    'わんちゃんも キラキラも 出てきます。',
+};
+function showTapDesc() {
+  $('tap-desc').textContent = TAP_DESC[$('tap-select').value] || '';
+}
+$('tap-select').addEventListener('change', showTapDesc);
+showTapDesc();
+
 function showTravelDesc() {
   const v = $('travel-select').value;
   $('travel-desc').textContent = v === RANDOM
@@ -625,7 +637,7 @@ function pickMotion() {
   const name = pool.length ? pick(pool) : 'pyoko';
   const keys = Object.keys(state.spots);
   const spot = MOTIONS[name].needsSpot && keys.length ? state.spots[pick(keys)] : null;
-  return { name, speed: pick(['1.4', '1', '0.7']), spot, travel: pick(travelKeys) };
+  return { name, speed: pick(['1.4', '2', '2.8', '4']), spot, travel: pick(travelKeys) };
 }
 
 function play() {
@@ -642,6 +654,7 @@ function play() {
     part: state.part,
     spot: pick.spot,
     travel: pick.travel,
+    tap: $('tap-select').value,
     onExit: () => showScreen('screen-motion'),
   });
 }
@@ -697,6 +710,7 @@ function currentRecord(maxSide = 512) {
     part: state.part,
     motion: $('motion-select').value,
     travel: $('travel-select').value,
+    tap: $('tap-select').value,
     speed: $('speed-select').value,
     spots: spotsToRatio(state.spots, img),
   };
@@ -719,7 +733,10 @@ function applyRecord(rec) {
     state.spots = spotsFromRatio(rec.spots, img);
     fillMotionSelect(state.part, rec.motion);
     fillTravelSelect(rec.travel || (MOTIONS[rec.motion] || {}).defaultTravel || 'none');
-    if (rec.speed) $('speed-select').value = rec.speed;
+    if (rec.tap) { $('tap-select').value = rec.tap; showTapDesc(); }
+    if (rec.speed && [...$('speed-select').options].some((o) => o.value === rec.speed)) {
+      $('speed-select').value = rec.speed;
+    }
     drawInto(previewCanvas, img, 0.34);
     showScreen('screen-motion');
   };

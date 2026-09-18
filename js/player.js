@@ -28,6 +28,8 @@ export function createPlayer({ root, canvas, exitBtn, ring, toast }) {
   let part = 'body';             // body / face / chara
   let wiggleData = null;         // しっぽ・前足をゆらすための絵（使うときだけ）
   let travel = createTravel('none');  // 画面のどこを動きまわるか
+  let tapMode = 'dog';           // さわったときの反応 dog / sparkle / both
+  let stamps = [];               // さわるたびに ふえる わんちゃん
   let particles = [];
   let rafId = 0;
   let wakeLock = null;
@@ -76,6 +78,39 @@ export function createPlayer({ root, canvas, exitBtn, ring, toast }) {
     ctx.lineTo(cssW, cssH); ctx.lineTo(0, cssH); ctx.closePath();
     ctx.fill();
     return groundY;
+  }
+
+  /* ---------- さわると ふえる わんちゃん ---------- */
+  const STAMP_MAX = 40;          // ふえすぎて画面がうまらないように
+
+  function addStamp(x, y) {
+    stamps.push({
+      x, y,
+      born: performance.now(),
+      size: (0.16 + Math.random() * 0.10) * Math.min(cssW, cssH),
+      rot: (Math.random() - 0.5) * 0.7,
+      phase: Math.random() * Math.PI * 2,
+    });
+    while (stamps.length > STAMP_MAX) stamps.shift();
+  }
+
+  function drawStamps(now) {
+    if (!image) return;
+    const long = Math.max(image.width, image.height);
+    for (const st of stamps) {
+      const age = now - st.born;
+      // ぽんっと はずんで出てくる
+      const t = Math.min(1, age / 320);
+      const pop = (1 - Math.pow(1 - t, 3)) * (1 + 0.25 * Math.sin(t * Math.PI));
+      const breathe = 1 + Math.sin(now / 700 + st.phase) * 0.03;
+      const k = st.size / long * pop * breathe;
+      const w = image.width * k, h = image.height * k;
+      ctx.save();
+      ctx.translate(st.x, st.y);
+      ctx.rotate(st.rot + Math.sin(now / 900 + st.phase) * 0.04);
+      ctx.drawImage(image, -w / 2, -h / 2, w, h);
+      ctx.restore();
+    }
   }
 
   /* ---------- キラキラ ---------- */
@@ -130,6 +165,8 @@ export function createPlayer({ root, canvas, exitBtn, ring, toast }) {
     const tr = travel.step(dt, cssW, cssH, m.w, m.h);
     if (isChara) drawCharacter(phase, pose, hop, groundY, m, tr);
     else drawPlainDog(phase, pose, hop, groundY, m, tr);
+
+    drawStamps(now);   // さわって出したわんちゃんは、かならず見えるように手前へ
 
     drawParticles(dt);
   }
@@ -255,7 +292,8 @@ export function createPlayer({ root, canvas, exitBtn, ring, toast }) {
   const onPointerDown = (e) => {
     if (exitBtn.contains(e.target)) return;   // おわるボタンだけは別あつかい
     boost = Math.min(1, boost + 0.8);
-    spawnSparkles(e.clientX, e.clientY);
+    if (tapMode === 'dog' || tapMode === 'both') addStamp(e.clientX, e.clientY);
+    if (tapMode === 'sparkle' || tapMode === 'both') spawnSparkles(e.clientX, e.clientY);
   };
   const onPopState = () => { if (running) history.pushState({ dogPlay: true }, ''); };
 
@@ -296,19 +334,24 @@ export function createPlayer({ root, canvas, exitBtn, ring, toast }) {
   /* ---------- 開始・終了 ---------- */
   let onExitCallback = null;
 
-  async function start({ cutout, motionName, speed, part: partName, spot, travel: travelKind, onExit }) {
+  async function start({ cutout, motionName, speed, part: partName, spot,
+                        travel: travelKind, tap, onExit }) {
     image = cutout;
     motion = getMotion(motionName);
     part = partName || 'body';
     wiggleData = (motion.wiggle && spot) ? buildWiggle(cutout, spot) : null;
-    travel = createTravel(travelKind || motion.defaultTravel || 'none');
-    duration = motion.defaultDuration * (Number(speed) || 1);   // speed は倍率
+
+    const tempo = Number(speed) || 1;                            // speed は倍率（大きいほどゆっくり）
+    duration = motion.defaultDuration * tempo;
+    travel = createTravel(travelKind || motion.defaultTravel || 'none', tempo);
     onExitCallback = onExit;
 
     root.hidden = false;
     resize();
     running = true;
     particles = [];
+    stamps = [];
+    tapMode = tap || 'dog';
     boost = 0;
     startTime = lastTime = performance.now();
 

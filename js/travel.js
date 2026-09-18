@@ -20,8 +20,13 @@ export const TRAVELS = {
   bounce: { icon: '🏀', label: '🏀 スーパーボール',  desc: '画面じゅうを あちこち 跳ねまわります。' },
 };
 
-export function createTravel(kind) {
+/**
+ * @param {string} kind  none / run / bounce
+ * @param {number} tempo はやさの倍率（大きいほど ゆっくり）。動きの速さとそろえる。
+ */
+export function createTravel(kind, tempo = 1) {
   const mode = TRAVELS[kind] ? kind : 'none';
+  const slow = Math.max(0.2, tempo);
   let started = false;
   let t = 0;                 // run 用の時間
   let dir = 1;               // 1 = 右へ、-1 = 左へ
@@ -47,10 +52,10 @@ export function createTravel(kind) {
     if (mode === 'none') return { x: null, y: null, flip: 1, spin: 0 };
 
     if (!started) { started = true; t = 0; if (mode === 'bounce') startBounce(w, h, ow, oh); }
-    const sec = Math.min(dt, 40) / 1000;   // カクついた時に飛びすぎないように
+    const sec = Math.min(dt, 40) / 1000 / slow;   // カクついた時に飛びすぎないように
 
     if (mode === 'run') {
-      t += Math.min(dt, 40);
+      t += Math.min(dt, 40) / slow;
       const span = w + ow * 1.4;           // 画面の外から外まで
       const k = t / RUN_MS;
       if (k >= 1) {
