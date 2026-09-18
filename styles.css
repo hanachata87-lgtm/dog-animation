@@ -133,3 +133,7 @@ html.is-playing, html.is-playing body{
 .parent .parent-body{padding:0 16px 16px;font-size:13px;line-height:1.85;color:#6b5c64;}
 .parent .parent-body ol{padding-left:1.3em;margin:6px 0 14px;}
 .parent .parent-body h3{font-size:14px;margin:14px 0 4px;color:var(--ink);}
+
+/* おまかせのときは、動きまわりかた と はやさ は じどうで決まる */
+.field.is-off{opacity:.45;}
+.field.is-off .select{background:#f6f0f3;}

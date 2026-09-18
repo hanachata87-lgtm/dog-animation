@@ -2,10 +2,10 @@
 <html lang="ja">
 <head>
 <meta charset="utf-8">
-<title>わんわん ぴょこぴょこ</title>
+<title>ぴょこぴょこ うごかそう</title>
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <meta name="theme-color" content="#ffd9e8">
-<meta name="description" content="犬の写真を切り抜いて、かわいく動かすアプリ。写真はスマホの中だけで処理します。">
+<meta name="description" content="写真を切り抜いて、かわいく動かすアプリ。犬・ねこ・人の顔など なんでもOK。写真はスマホの中だけで処理します。">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🐶</text></svg>">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icon-192.png">
@@ -19,8 +19,9 @@
 <!-- ========== 1. さいしょの画面 ========== -->
 <section class="screen is-active" id="screen-start">
   <div class="pad">
-    <h1 class="title">🐶 わんわん<br>ぴょこぴょこ</h1>
-    <p class="lead">犬の写真をえらんで、かわいく動かそう。<br>
+    <h1 class="title">🐾 ぴょこぴょこ<br>うごかそう</h1>
+    <p class="lead">写真をえらんで、かわいく動かそう。<br>
+      犬でも ねこでも 人の顔でも、なんでもOK。<br>
       <span class="note">写真はこのスマホの中だけで処理します。どこにも送られません。</span></p>
 
     <label class="btn btn-primary btn-huge">
@@ -28,7 +29,7 @@
       <input type="file" id="file-input" accept="image/*" hidden>
     </label>
 
-    <button class="btn btn-ghost" id="btn-resume" hidden>まえのわんちゃんで あそぶ</button>
+    <button class="btn btn-ghost" id="btn-resume" hidden>まえのつづきから あそぶ</button>
 
     <section class="fav-area" id="fav-area" hidden>
       <h2 class="fav-label">⭐ おきにいり</h2>
@@ -36,7 +37,7 @@
       <p class="hint">長おしすると けせます。</p>
     </section>
 
-    <p class="hint" id="start-hint">はじめてのときは、犬がはっきり写っている明るい写真がおすすめです。</p>
+    <p class="hint" id="start-hint">うごかしたいもの（犬・ねこ・人の顔など）が はっきり写っている、明るい写真がおすすめです。</p>
 
     <details class="parent">
       <summary>おうちのかたへ：キーボードや スワイプで 画面が変わってしまうとき</summary>
@@ -82,7 +83,7 @@
 <section class="screen" id="screen-cut">
   <header class="bar">
     <button class="btn btn-small btn-ghost" id="btn-back-start">もどる</button>
-    <span class="bar-title" id="cut-title">犬をタップしてね</span>
+    <span class="bar-title" id="cut-title">うごかすものを タップしてね</span>
   </header>
 
   <div class="stage" id="cut-stage">
@@ -104,7 +105,7 @@
       <span>ふでの太さ</span>
       <input type="range" id="brush-size" min="8" max="90" value="30">
     </label>
-    <p class="hint" id="cut-hint">犬のからだの まん中あたりを タップしてください。</p>
+    <p class="hint" id="cut-hint">うごかしたいものの まん中あたりを タップしてください。</p>
     <button class="btn btn-primary btn-huge" id="btn-to-motion" disabled>これでOK →</button>
   </div>
 </section>
@@ -122,9 +123,9 @@
     <button class="btn btn-primary btn-huge" id="btn-part-face">😀 かおだけ</button>
     <button class="btn btn-primary btn-huge" id="btn-part-chara">🕺 かおだけ＋イラストの体</button>
     <p class="hint">
-      <b>ぜんしん</b>… ぴょこぴょこ／しっぽふりふり／おてふり<br>
-      <b>かおだけ</b>… 肉球の手で いないいないばあ<br>
-      <b>かおだけ＋イラストの体</b>… 犬の顔に マンガの体がついて、ウェーイ！と おどります
+      <b>ぜんしん</b>… 写真のまま うごかす<br>
+      <b>かおだけ</b>… 顔に まるを合わせて 切り出す（いないいないばあ が できます）<br>
+      <b>かおだけ＋イラストの体</b>… 顔に マンガの体がついて、ウェーイ！と おどります
     </p>
   </div>
 </section>
@@ -148,7 +149,7 @@
       <span>まるの大きさ</span>
       <input type="range" id="face-size" min="12" max="100" value="46">
     </label>
-    <p class="hint">まるを 指で動かして、犬の顔に あわせてください。</p>
+    <p class="hint">まるを 指で動かして、顔に あわせてください。</p>
     <button class="btn btn-primary btn-huge" id="btn-face-ok">これでOK →</button>
   </div>
 </section>
@@ -202,7 +203,7 @@
     <label class="field">
       <span class="field-label">さわったら どうなる？</span>
       <select id="tap-select" class="select">
-        <option value="dog" selected>🐶 わんちゃんが ふえる</option>
+        <option value="dog" selected>🐾 おともだちが ふえる</option>
         <option value="sparkle">✨ キラキラが でる</option>
         <option value="both">✨🐶 りょうほう</option>
       </select>
@@ -222,7 +223,7 @@
     <button class="btn btn-primary btn-huge" id="btn-play">▶ ぜんがめんで あそぶ</button>
     <button class="btn btn-ghost" id="btn-fav">⭐ おきにいりに 入れる</button>
     <p class="hint">
-      再生中は画面をさわっても止まりません（さわると わんちゃんが よろこびます）。<br>
+      再生中は画面をさわっても止まりません（さわると よろこびます）。<br>
       おわるときは、<b>右上のボタンを2.5秒ながおし</b>してください。
     </p>
   </div>

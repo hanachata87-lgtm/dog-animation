@@ -10,10 +10,13 @@
      pose(p)       … 絵の動き。p は 0〜1 のくり返し位置
                        lift : うき上がる高さの割合、sx/sy : つぶれ／のび
                        rot  : かたむき、dx : 横ゆれ（画面幅の割合）
+     wholeBody     … true なら かたむき・大きさを 体ぜんたいに かける
+                     （イラストの体をつけたとき、顔だけでなく体ごと動く）
      rig(p)        … イラストの体のかっこう（'chara' のときだけ）
      overlay(...)  … 絵の上に重ねて描くもの（省略可）
      needsSpot     … ゆらす場所をタップで決める必要があるとき、その名前
      wiggle(p)     … ゆらす角度（ラジアン）
+     defaultTravel … おすすめの「動きまわりかた」
      hopHeight / defaultDuration
    ============================================================ */
 
@@ -27,6 +30,8 @@ const easeInOut = (t) => (t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2)
 const easeOut = (t) => 1 - Math.pow(1 - t, 3);
 const mix = (a, b, t) => a + (b - a) * t;
 const mixPt = (a, b, t) => ({ x: mix(a.x, b.x, t), y: mix(a.y, b.y, t) });
+/** 0 →1→ 0 と なめらかに ゆきかえりする波 */
+const wave01 = (p) => (1 - Math.cos(p * TAU)) / 2;
 
 /* ============================================================
    ぴょこぴょこ
@@ -93,16 +98,16 @@ function peekabooPose(p) {
   if (t > 0 && t < 0.42) {
     const k = t / 0.42;
     const damp = Math.exp(-k * 4.5);
-    const wave = Math.cos(k * 16);
-    sx += 0.17 * damp * wave;
-    sy -= 0.17 * damp * wave;
+    const w = Math.cos(k * 16);
+    sx += 0.17 * damp * w;
+    sy -= 0.17 * damp * w;
     lift += 0.06 * damp * Math.sin(k * 11);
     rot += 0.05 * damp * Math.sin(k * 13);
   }
   return { lift, sx, sy, rot, dx: 0 };
 }
 
-/** 「かおだけ」版：肉球の手が ふわっと浮いて顔をかくす */
+/** 「かおだけ」版：まるい手が ふわっと浮いて顔をかくす */
 function peekabooOverlay(ctx, p, box) {
   const cover = coverAmount(p);
   const r = Math.max(box.w, box.h) * 0.60;
@@ -113,11 +118,10 @@ function peekabooOverlay(ctx, p, box) {
   const x = closeX + (openX - closeX) * (1 - cover);
   const y = box.cy - box.h * 0.02;
   const tilt = 0.55 * (1 - cover);
-  const wiggle = hideWiggle(p) * 0.06;
+  const wig = hideWiggle(p) * 0.06;
 
-  drawPaw(ctx, box.cx - x, y, r, -tilt + wiggle);
-  drawPaw(ctx, box.cx + x, y, r,  tilt + wiggle);
-
+  drawPaw(ctx, box.cx - x, y, r, -tilt + wig);
+  drawPaw(ctx, box.cx + x, y, r,  tilt + wig);
   drawBurst(ctx, box.cx, box.cy, Math.max(box.w, box.h) * 0.78,
             clamp01(1 - Math.abs(p - OPEN_END) / 0.14));
 }
@@ -142,27 +146,24 @@ function peekabooBodyRig(p) {
   } else if (p < 0.82) {                   // ばんざいのまま ゆらゆら
     hand = HAND_CHEER; scale = 1;
   } else {                                 // そっと おろす
-    const k = easeInOut((p - 0.82) / 0.18);
-    hand = mixPt(HAND_CHEER, HAND_REST, k);
+    hand = mixPt(HAND_CHEER, HAND_REST, easeInOut((p - 0.82) / 0.18));
     scale = 1;
   }
 
   const wig = hideWiggle(p) * 0.06;
   const cheer = (p > OPEN_END && p < 0.82) ? Math.sin((p - OPEN_END) * 26) * 0.10 : 0;
-  const left  = { x: -hand.x + wig, y: hand.y + cheer };
-  const right = { x:  hand.x + wig, y: hand.y - cheer };
-
   const bounce = (p > HIDE_OUT && p < 0.9) ? Math.exp(-(p - HIDE_OUT) * 8) : 0;
   return {
     hipShift: wig * 1.2,
     handScale: scale,
-    arms: [{ to: left }, { to: right }],
+    arms: [{ to: { x: -hand.x + wig, y: hand.y + cheer } },
+           { to: { x:  hand.x + wig, y: hand.y - cheer } }],
     legs: [{ angles: [DOWN + 0.08 + 0.12 * bounce, DOWN + 0.16 + 0.40 * bounce] },
            { angles: [DOWN - 0.08 - 0.12 * bounce, DOWN - 0.16 - 0.40 * bounce] }],
   };
 }
 
-function peekabooBodyOverlay(ctx, p, box) {
+function burstOnly(ctx, p, box) {
   drawBurst(ctx, box.cx, box.cy, Math.max(box.w, box.h) * 0.78,
             clamp01(1 - Math.abs(p - OPEN_END) / 0.14));
 }
@@ -170,7 +171,6 @@ function peekabooBodyOverlay(ctx, p, box) {
 /* ============================================================
    ウェーイ！（へんてこダンス）
    1周で2回、左右のうでを 入れかえながら ななめ上へ つき上げる。
-   腰は左右にふり、ひざはリズムに合わせて はずむ。
    ============================================================ */
 const WAY_UP   = { x: 1.32, y: -1.62 };
 const WAY_DOWN = { x: 1.18, y:  0.62 };
@@ -190,7 +190,7 @@ function waySnap(p) {
 
 function waywayPose(p) {
   const { snap, leftUp, k } = waySnap(p);
-  const hit = 1 - snap;                       // 拍の直後がいちばん強い
+  const hit = 1 - snap;
   return {
     lift: 0.10 * Math.abs(Math.sin(p * TAU)),
     sx: 1 + 0.07 * hit,
@@ -202,10 +202,7 @@ function waywayPose(p) {
 
 function waywayRig(p) {
   const { leftUp, snap } = waySnap(p);
-  const from = wayTargets(!leftUp);
-  const to   = wayTargets(leftUp);
-  const arms = [0, 1].map((i) => ({ to: mixPt(from[i], to[i], snap) }));
-
+  const from = wayTargets(!leftUp), to = wayTargets(leftUp);
   const sway = Math.sin(p * TAU);
   const hit = 1 - snap;
   // あしの付け根は体についたまま、足先だけ「ハの字」に 開く→とじる をくり返す
@@ -213,21 +210,91 @@ function waywayRig(p) {
   const bend = 0.20 * hit;
   return {
     hipShift: sway * 0.26,
-    arms,
+    arms: [0, 1].map((i) => ({ to: mixPt(from[i], to[i], snap) })),
     legs: [{ angles: [DOWN + 0.05 + 0.08 * open + bend, DOWN + 0.14 + 0.60 * open - bend * 1.5] },
            { angles: [DOWN - 0.05 - 0.08 * open - bend, DOWN - 0.14 - 0.60 * open + bend * 1.5] }],
   };
 }
 
 /* ============================================================
-   しっぽふりふり／おてふり（タップした場所だけをゆらす）
+   ばんざい（体つき）：両手を上へ つき上げて ジャンプ
    ============================================================ */
-function bobPose(strength) {
-  return (p) => ({
-    lift: (1 + Math.sin(p * TAU * 2)) / 2,
-    sx: 1, sy: 1 + strength * Math.sin(p * TAU * 2),
-    rot: 0, dx: 0,
-  });
+const BANZAI_UP = { x: 1.22, y: -1.72 };
+
+function banzaiPose(p) {
+  const up = Math.pow(Math.sin(Math.PI * p), 0.7);
+  return { lift: up, sx: 1 + 0.06 * up, sy: 1 - 0.06 * up, rot: 0, dx: 0 };
+}
+
+function banzaiRig(p) {
+  const up = Math.pow(Math.sin(Math.PI * p), 0.7);
+  const hand = mixPt(HAND_REST, BANZAI_UP, up);
+  const crouch = Math.pow(1 - up, 2);
+  return {
+    hipShift: 0,
+    arms: [{ to: { x: -hand.x, y: hand.y } }, { to: hand }],
+    legs: [{ angles: [DOWN + 0.08 + 0.14 * crouch, DOWN + 0.16 + 0.50 * crouch] },
+           { angles: [DOWN - 0.08 - 0.14 * crouch, DOWN - 0.16 - 0.50 * crouch] }],
+  };
+}
+
+/* ============================================================
+   おいでおいで（体つき）：片手を ふりふり
+   ============================================================ */
+function helloPose(p) {
+  return { lift: wave01(p) * 0.30, sx: 1, sy: 1, rot: Math.sin(p * TAU) * 0.07, dx: 0 };
+}
+
+function helloRig(p) {
+  const w = Math.sin(p * TAU * 2);          // 1周で2回ふる
+  return {
+    hipShift: Math.sin(p * TAU) * 0.10,
+    arms: [{ to: { x: -1.08, y: 0.55 } },
+           { to: { x: 1.12 + 0.30 * w, y: -1.42 + 0.20 * w } }],
+    legs: [{ angles: [DOWN + 0.06, DOWN + 0.16] },
+           { angles: [DOWN - 0.06, DOWN - 0.16] }],
+  };
+}
+
+/* ============================================================
+   写真そのままで つかえる かんたんな動き
+   ============================================================ */
+/** くるくる：まわりながら ふわふわ うかぶ */
+function spinPose(p) {
+  return { lift: wave01(p) * 0.7, sx: 1, sy: 1, rot: p * TAU, dx: 0 };
+}
+
+/** ぷるぷる：こまかく ふるえる（水をはらう動物みたいに） */
+function shakePose(p) {
+  const w = Math.sin(p * TAU * 6);          // 1周で6回
+  return {
+    lift: wave01(p * 2) * 0.35,
+    sx: 1 + 0.05 * Math.abs(w),
+    sy: 1 - 0.05 * Math.abs(w),
+    rot: w * 0.11,
+    dx: w * 0.014,
+  };
+}
+
+/** ゆらゆら：ゆっくり 左右にかたむく（おちつく動き） */
+function swayPose(p) {
+  const a = Math.sin(p * TAU);
+  return { lift: wave01(p * 2) * 0.5, sx: 1, sy: 1, rot: a * 0.17, dx: a * 0.05 };
+}
+
+/** おおきくちいさく：ふくらんだり しぼんだり */
+function pulsePose(p) {
+  const e = Math.pow(wave01(p), 0.7);
+  const s = 0.86 + 0.36 * e;
+  return { lift: e * 0.35, sx: s, sy: s, rot: Math.sin(p * TAU * 2) * 0.04, dx: 0 };
+}
+
+/* ============================================================
+   ふりふり：タップした場所だけを 付け根を軸にゆらす
+   （しっぽ・手・耳 …… 場所がちがうだけで しくみは同じ）
+   ============================================================ */
+function wavePose(p) {
+  return { lift: wave01(p * 2), sx: 1, sy: 1 + 0.012 * Math.sin(p * TAU * 2), rot: 0, dx: 0 };
 }
 
 /* ============================================================
@@ -236,74 +303,83 @@ function bobPose(strength) {
 export const MOTIONS = {
   pyoko: {
     label: 'ぴょこぴょこ',
-    desc: '全身が のびちぢみしながら ぴょんぴょん はねます。',
+    desc: 'のびちぢみしながら ぴょんぴょん はねます。',
     parts: ['body', 'face', 'chara'],
-    anchor: 'ground',
-    pose: pyokoPose,
-    rig: pyokoRig,
-    defaultTravel: 'bounce',
-    hopHeight: 0.30,
-    defaultDuration: 800,
+    anchor: 'ground', pose: pyokoPose, rig: pyokoRig,
+    defaultTravel: 'bounce', hopHeight: 0.30, defaultDuration: 800,
+  },
+  wave: {
+    label: 'ふりふり',
+    desc: 'タップしたところ（しっぽ・手・耳など）だけが ふりふり ゆれます。',
+    parts: ['body', 'face'],
+    anchor: 'ground', pose: wavePose,
+    needsSpot: 'wave',
+    spotHint: 'ゆらしたいところ（しっぽ・手・耳など）を タップしてね',
+    wiggle: (p) => Math.sin(p * TAU) * 0.38,
+    defaultTravel: 'run', hopHeight: 0.035, defaultDuration: 620,
   },
   peekaboo: {
     label: 'いないいないばあ',
-    desc: '肉球の手が 顔をかくして、ぱっと開いて「ばあ！」。',
+    desc: 'まるい手が 顔をかくして、ぱっと開いて「ばあ！」。',
     parts: ['face'],
-    anchor: 'center',
-    pose: peekabooPose,
-    overlay: peekabooOverlay,
-    defaultTravel: 'none',
-    hopHeight: 0.10,
-    defaultDuration: 2400,
+    anchor: 'center', pose: peekabooPose, overlay: peekabooOverlay,
+    defaultTravel: 'none', hopHeight: 0.10, defaultDuration: 2400,
   },
   wayway: {
     label: 'ウェーイ！',
     desc: 'イラストの体で、うでを ななめ上に つき上げながら へんてこダンス。',
     parts: ['chara'],
-    anchor: 'ground',
-    pose: waywayPose,
-    rig: waywayRig,
-    defaultTravel: 'run',
-    hopHeight: 0.12,
-    defaultDuration: 1000,
+    anchor: 'ground', pose: waywayPose, rig: waywayRig,
+    defaultTravel: 'run', hopHeight: 0.12, defaultDuration: 1000,
   },
   peekabooBody: {
     label: 'いないいないばあ（体つき）',
     desc: 'イラストの体が じぶんの手で顔をかくして、ばんざいで「ばあ！」。',
     parts: ['chara'],
-    anchor: 'ground',
-    pose: peekabooPose,
-    rig: peekabooBodyRig,
-    overlay: peekabooBodyOverlay,
-    defaultTravel: 'none',
-    hopHeight: 0.10,
-    defaultDuration: 2400,
+    anchor: 'ground', pose: peekabooPose, rig: peekabooBodyRig, overlay: burstOnly,
+    defaultTravel: 'none', hopHeight: 0.10, defaultDuration: 2400,
   },
-  tail: {
-    label: 'しっぽふりふり',
-    desc: 'タップした しっぽのあたりだけが、ぱたぱた ゆれます。',
-    parts: ['body'],
-    anchor: 'ground',
-    pose: bobPose(0.012),
-    needsSpot: 'tail',
-    spotHint: 'しっぽの まん中あたりを タップしてね',
-    wiggle: (p) => Math.sin(p * TAU) * 0.34,
-    defaultTravel: 'run',
-    hopHeight: 0.035,
-    defaultDuration: 520,
+  banzai: {
+    label: 'ばんざい',
+    desc: '両手を 上にあげて ジャンプ。うれしいときの かっこう。',
+    parts: ['chara'],
+    anchor: 'ground', pose: banzaiPose, rig: banzaiRig,
+    defaultTravel: 'bounce', hopHeight: 0.24, defaultDuration: 1200,
   },
-  te: {
-    label: 'おてふり',
-    desc: 'タップした 前足のあたりだけが、ふりふり 動きます。',
-    parts: ['body'],
-    anchor: 'ground',
-    pose: bobPose(0.010),
-    needsSpot: 'te',
-    spotHint: '前足（おてする手）を タップしてね',
-    wiggle: (p) => Math.sin(p * TAU) * 0.42,
-    defaultTravel: 'run',
-    hopHeight: 0.03,
-    defaultDuration: 700,
+  hello: {
+    label: 'おいでおいで',
+    desc: '片手を ふりふりして、よんでいるみたいな かっこう。',
+    parts: ['chara'],
+    anchor: 'ground', pose: helloPose, rig: helloRig,
+    defaultTravel: 'none', hopHeight: 0.08, defaultDuration: 1400,
+  },
+  spin: {
+    label: 'くるくる',
+    desc: 'ぐるっと まわりながら ふわふわ うかびます。',
+    parts: ['body', 'face', 'chara'],
+    anchor: 'ground', pose: spinPose, wholeBody: true,
+    defaultTravel: 'bounce', hopHeight: 0.35, defaultDuration: 1800,
+  },
+  shake: {
+    label: 'ぷるぷる',
+    desc: 'こまかく ぶるぶる ふるえます。',
+    parts: ['body', 'face', 'chara'],
+    anchor: 'ground', pose: shakePose, wholeBody: true,
+    defaultTravel: 'none', hopHeight: 0.08, defaultDuration: 900,
+  },
+  sway: {
+    label: 'ゆらゆら',
+    desc: 'ゆっくり 左右にかたむきます。おちつく動きです。',
+    parts: ['body', 'face', 'chara'],
+    anchor: 'ground', pose: swayPose, wholeBody: true,
+    defaultTravel: 'none', hopHeight: 0.10, defaultDuration: 2200,
+  },
+  pulse: {
+    label: 'おおきく ちいさく',
+    desc: 'ふくらんだり しぼんだり、大きさが 変わります。',
+    parts: ['body', 'face', 'chara'],
+    anchor: 'ground', pose: pulsePose, wholeBody: true,
+    defaultTravel: 'bounce', hopHeight: 0.18, defaultDuration: 1400,
   },
 };
 

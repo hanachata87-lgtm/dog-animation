@@ -154,7 +154,7 @@ export function buildCutout(photoCanvas, mask, width, height, { pad = 6, feather
 }
 
 /**
- * 切り抜いた犬から「顔だけ」を丸く取り出す。
+ * 切り抜いた絵から「顔だけ」を丸く取り出す。
  * ふちをぼかしてあるので、首のところがスパッと切れて不自然にならない。
  * @param {number} cx,cy,r  切り抜き画像の中での 円の中心と半径（画素）
  */

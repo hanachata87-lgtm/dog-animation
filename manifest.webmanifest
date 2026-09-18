@@ -1,7 +1,7 @@
 {
-  "name": "わんわん ぴょこぴょこ",
-  "short_name": "わんわん",
-  "description": "犬の写真を切り抜いて、かわいく動かすアプリ",
+  "name": "ぴょこぴょこ うごかそう",
+  "short_name": "ぴょこぴょこ",
+  "description": "写真を切り抜いて、かわいく動かすアプリ。犬・ねこ・人の顔など なんでもOK",
   "start_url": "./",
   "scope": "./",
   "display": "fullscreen",

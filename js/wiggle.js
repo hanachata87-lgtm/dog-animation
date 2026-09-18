@@ -9,7 +9,7 @@
    ============================================================ */
 
 /**
- * @param {HTMLCanvasElement|HTMLImageElement} image 切り抜いた犬
+ * @param {HTMLCanvasElement|HTMLImageElement} image 切り抜いた絵
  * @param {{x:number,y:number,r:number}} spot 絵の中での ゆらす場所（画素）
  */
 export function buildWiggle(image, spot) {

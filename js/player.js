@@ -2,12 +2,12 @@
    player.js
    全画面ループ再生 ＋ 子どもロック。
    ・画面をさわっても止まらない／切り替わらない
-   ・さわると わんちゃんが 大きくはねて キラキラが出る
+   ・さわると 大きくはねて、おともだちが ふえる／キラキラが出る
    ・おわるのは「右上のボタンを2.5秒ながおし」だけ
    ============================================================ */
 
 import { getMotion } from './motions.js';
-import { drawBodyBack, drawBodyFront, BODY_HEIGHT } from './body.js';
+import { drawBodyBack, drawBodyFront, restRig, BODY_HEIGHT } from './body.js';
 import { buildWiggle } from './wiggle.js';
 import { createTravel } from './travel.js';
 
@@ -28,8 +28,10 @@ export function createPlayer({ root, canvas, exitBtn, ring, toast }) {
   let part = 'body';             // body / face / chara
   let wiggleData = null;         // しっぽ・前足をゆらすための絵（使うときだけ）
   let travel = createTravel('none');  // 画面のどこを動きまわるか
+  let shuffleFn = null;          // おまかせ：つぎの組み合わせを もらう役
+  let nextSwitchAt = Infinity;   // つぎに動きが変わる時こく
   let tapMode = 'dog';           // さわったときの反応 dog / sparkle / both
-  let stamps = [];               // さわるたびに ふえる わんちゃん
+  let stamps = [];               // さわるたびに ふえる おともだち
   let particles = [];
   let rafId = 0;
   let wakeLock = null;
@@ -80,7 +82,7 @@ export function createPlayer({ root, canvas, exitBtn, ring, toast }) {
     return groundY;
   }
 
-  /* ---------- さわると ふえる わんちゃん ---------- */
+  /* ---------- さわると ふえる おともだち ---------- */
   const STAMP_MAX = 40;          // ふえすぎて画面がうまらないように
 
   function addStamp(x, y) {
@@ -154,19 +156,27 @@ export function createPlayer({ root, canvas, exitBtn, ring, toast }) {
     lastTime = now;
     boost *= Math.exp(-dt / 320);
 
+    // おまかせ：一定時間たったら つぎの動きへ（1周の切れ目で切りかわる）
+    if (shuffleFn && now >= nextSwitchAt) {
+      applyCombo(shuffleFn(), now);
+      boost = 1;
+      spawnSparkles(cssW / 2, cssH * 0.45);
+    }
+
     const groundY = drawBackground(now);
     const phase = (((now - startTime) / duration) % 1 + 1) % 1;
     const pose = motion.pose(phase);
     const hop = cssH * motion.hopHeight * (1 + boost * 0.7);
 
     // 先に「どれくらいの大きさで描くか」を決め、それを見て動きまわる位置を計算する
-    const isChara = part === 'chara' && !!motion.rig;
+    // 体つきをえらんでいたら、rig をもたない動き（くるくる等）でも 体はつけたままにする
+    const isChara = part === 'chara';
     const m = isChara ? charaMetrics() : plainMetrics();
     const tr = travel.step(dt, cssW, cssH, m.w, m.h);
     if (isChara) drawCharacter(phase, pose, hop, groundY, m, tr);
     else drawPlainDog(phase, pose, hop, groundY, m, tr);
 
-    drawStamps(now);   // さわって出したわんちゃんは、かならず見えるように手前へ
+    drawStamps(now);   // さわって出したおともだちは、かならず見えるように手前へ
 
     drawParticles(dt);
   }
@@ -247,21 +257,26 @@ export function createPlayer({ root, canvas, exitBtn, ring, toast }) {
       ? tr.y - (bodyH - hs * 0.98) / 2          // tr.y は 体ぜんたいの まん中
       : footY0 - bodyH - pose.lift * hop;
     const hw = image.width * (hs / image.height);
-    const rig = motion.rig(phase);
+    const rig = motion.rig ? motion.rig(phase) : restRig();
 
     drawGroundShadow(neckX, footY0 + s * 0.30, s * 0.80, neckY + bodyH);
 
+    // 「体ぜんたいにかける」動きは 体のまん中を軸にし、そうでなければ 顔だけを動かす
+    const whole = !!motion.wholeBody;
+    const midY = (bodyH - hs * 0.98) / 2;
+
     ctx.save();
-    ctx.translate(neckX, neckY);
-    ctx.rotate(tr.spin);
-    ctx.scale(tr.flip, 1);
+    ctx.translate(neckX, neckY + midY);            // 体のまん中へ
+    ctx.rotate(tr.spin + (whole ? pose.rot : 0));
+    ctx.scale(tr.flip * (whole ? pose.sx : 1), whole ? pose.sy : 1);
+    ctx.translate(0, -midY);                       // 首にもどす
     drawBodyBack(ctx, s, rig);
 
     // 顔（首のところを軸にかたむける）
     ctx.save();
     ctx.translate(0, hs * 0.02);   // 首のところ（顔の下はし）
-    ctx.rotate(pose.rot);
-    ctx.scale(pose.sx, pose.sy);
+    ctx.rotate(whole ? 0 : pose.rot);
+    ctx.scale(whole ? 1 : pose.sx, whole ? 1 : pose.sy);
     ctx.drawImage(image, -hw / 2, -hs, hw, hs);
     ctx.restore();
 
@@ -353,19 +368,35 @@ export function createPlayer({ root, canvas, exitBtn, ring, toast }) {
   }
   const onVisibility = () => { if (running && document.visibilityState === 'visible') requestWakeLock(); };
 
+  /* ---------- 動き・はやさ・動きまわりかた を あてはめる ---------- */
+  function applyCombo(combo, now) {
+    motion = getMotion(combo.name);
+    const tempo = Number(combo.speed) || 1;          // 大きいほど ゆっくり
+    duration = motion.defaultDuration * tempo;
+    travel = createTravel(combo.travel || motion.defaultTravel || 'none', tempo);
+    wiggleData = (motion.wiggle && combo.spot) ? buildWiggle(image, combo.spot) : null;
+    startTime = now;
+    root.dataset.motion = combo.name || '';     // いま何の動きか（見た目には出ない）
+    root.dataset.travel = travel.mode;
+
+    if (shuffleFn) {
+      // 9〜16秒くらいで つぎへ。1周ぶんの切れ目に そろえる
+      const target = 9000 + Math.random() * 7000;
+      const cycles = Math.max(2, Math.round(target / duration));
+      nextSwitchAt = now + cycles * duration;
+    } else {
+      nextSwitchAt = Infinity;
+    }
+  }
+
   /* ---------- 開始・終了 ---------- */
   let onExitCallback = null;
 
   async function start({ cutout, motionName, speed, part: partName, spot,
-                        travel: travelKind, tap, onExit }) {
+                        travel: travelKind, tap, shuffle, onExit }) {
     image = cutout;
-    motion = getMotion(motionName);
     part = partName || 'body';
-    wiggleData = (motion.wiggle && spot) ? buildWiggle(cutout, spot) : null;
-
-    const tempo = Number(speed) || 1;                            // speed は倍率（大きいほどゆっくり）
-    duration = motion.defaultDuration * tempo;
-    travel = createTravel(travelKind || motion.defaultTravel || 'none', tempo);
+    shuffleFn = typeof shuffle === 'function' ? shuffle : null;
     onExitCallback = onExit;
 
     root.hidden = false;
@@ -375,8 +406,12 @@ export function createPlayer({ root, canvas, exitBtn, ring, toast }) {
     stamps = [];
     tapMode = tap || 'dog';
     boost = 0;
-    startTime = lastTime = performance.now();
+    lastTime = performance.now();
+    applyCombo({ name: motionName, speed, travel: travelKind, spot }, lastTime);
 
+    toast.textContent = shuffleFn
+      ? 'さわっても だいじょうぶ！ ときどき 動きが 変わります'
+      : 'さわっても だいじょうぶ！';
     toast.classList.remove('is-hidden');
     setTimeout(() => toast.classList.add('is-hidden'), 3500);
 
@@ -417,6 +452,8 @@ export function createPlayer({ root, canvas, exitBtn, ring, toast }) {
   function stop() {
     if (!running) return;
     running = false;
+    shuffleFn = null;
+    nextSwitchAt = Infinity;
     cancelAnimationFrame(rafId);
 
     window.removeEventListener('resize', resize);

@@ -87,14 +87,14 @@ $('file-input').addEventListener('change', async (e) => {
     layoutPhoto();
     drawPhoto();
     updateNextButton();
-    $('cut-hint').textContent = '犬のからだの まん中あたりを タップしてください。';
+    $('cut-hint').textContent = 'うごかしたいものの まん中あたりを タップしてください。';
     spinner(true, 'AIの準備中…（はじめは10〜30秒ほどかかります）');
     await loadSegmenter();
     spinner(false);
   } catch (err) {
     spinner(false);
     console.error(err);
-    fallbackToBrush('じどう切り抜きの準備ができませんでした（通信がとどいていないかもしれません）。「たす」の ふで で 犬をぬって切り抜けます。');
+    fallbackToBrush('じどう切り抜きの準備ができませんでした（通信がとどいていないかもしれません）。「たす」の ふで で ぬれば 切り抜けます。');
   }
 });
 
@@ -102,7 +102,7 @@ $('file-input').addEventListener('change', async (e) => {
 function fallbackToBrush(message) {
   state.noAI = true;
   setMode('add');
-  $('cut-hint').textContent = '指で 犬を なぞって ぬってください。はみ出したら「けす」で直せます。';
+  $('cut-hint').textContent = 'うごかしたいものを 指で なぞって ぬってください。はみ出したら「けす」で直せます。';
   alertBox(message);
 }
 
@@ -193,7 +193,7 @@ function setMode(mode) {
   state.mode = mode;
   document.querySelectorAll('.tool[data-mode]').forEach((b) => b.classList.toggle('is-on', b.dataset.mode === mode));
   $('cut-hint').textContent = {
-    tap:   '犬のからだの まん中あたりを タップしてください。',
+    tap:   'うごかしたいものの まん中あたりを タップしてください。',
     add:   '足りないところを 指で なぞって ふやします。',
     erase: 'いらないところを 指で なぞって けします。',
   }[mode];
@@ -300,13 +300,13 @@ async function tapSegment(pt) {
     updateNextButton();
 
     if (res.coverage > 0.85) {
-      $('cut-hint').textContent = 'うまく切り抜けませんでした。犬の からだの まん中を もう一度タップするか、ふでで直してください。';
+      $('cut-hint').textContent = 'うまく切り抜けませんでした。まん中あたりを もう一度タップするか、ふでで直してください。';
     } else {
       $('cut-hint').textContent = 'いいかんじ！ はみ出しは「けす」、足りないところは「たす」で直せます。';
     }
   } catch (err) {
     console.error(err);
-    fallbackToBrush('自動の切り抜きができませんでした。「たす」の ふで で 犬をぬってください。');
+    fallbackToBrush('自動の切り抜きができませんでした。「たす」の ふで で ぬってください。');
   } finally {
     spinner(false);
   }
@@ -355,7 +355,7 @@ $('btn-part-chara').addEventListener('click', () => goFaceCircle('chara'));
 function initFaceCircle() {
   const c = state.cutout;
   if (state.face) return;                       // もどってきたときは前のままにする
-  // 犬は たてに長い写真なら上のほう、よこに長いなら やや上に顔があることが多い
+  // たてに長い写真なら上のほう、よこに長いなら やや上に顔があることが多い
   const r = Math.min(c.width, c.height) * 0.35;
   state.face = {
     cx: c.width / 2,
@@ -434,6 +434,7 @@ const RANDOM = 'random';
 function goMotion() {
   const chosen = fillMotionSelect(state.part);
   fillTravelSelect((MOTIONS[chosen] || {}).defaultTravel || 'none');
+  syncRandomLock();
   drawInto(previewCanvas, state.playImage, 0.34);
   savePlay();
   showScreen('screen-motion');
@@ -451,7 +452,7 @@ function fillMotionSelect(part, keep) {
   }
   const o = document.createElement('option');
   o.value = RANDOM;
-  o.textContent = '🎲 おまかせ';
+  o.textContent = '🎲 おまかせ（つぎつぎ 変わる）';
   sel.appendChild(o);
 
   if (keep && [...sel.options].some((x) => x.value === keep)) sel.value = keep;
@@ -463,11 +464,22 @@ function fillMotionSelect(part, keep) {
 function showMotionDesc() {
   const v = $('motion-select').value;
   if (v === RANDOM) {
-    $('motion-desc').textContent = '［あそぶ］を押すたびに、動き・動きまわりかた・はやさ・ゆらす場所が ランダムに変わります。';
+    $('motion-desc').textContent =
+      'あそんでいるあいだ、10秒ぐらいごとに 動き・動きまわりかた・はやさが ひとりでに 変わりつづけます。'
+      + 'わたしっぱなしでも 飽きにくい、いちばんのおすすめです。';
     return;
   }
   const m = MOTIONS[v];
   $('motion-desc').textContent = m ? m.desc : '';
+}
+
+/** おまかせのときは、動きまわりかた と はやさ も じどうで決まる */
+function syncRandomLock() {
+  const isShuffle = $('motion-select').value === RANDOM;
+  for (const id of ['travel-select', 'speed-select']) {
+    $(id).disabled = isShuffle;
+    $(id).closest('.field').classList.toggle('is-off', isShuffle);
+  }
 }
 
 /* ---------- どこを動きまわるか ---------- */
@@ -490,9 +502,9 @@ function fillTravelSelect(keep) {
 
 /* ---------- さわったときの反応 ---------- */
 const TAP_DESC = {
-  dog:     'さわったところに わんちゃんが 出てきます。さわるほど どんどん ふえます。',
+  dog:     'さわったところに おともだちが 出てきます。さわるほど どんどん ふえます。',
   sparkle: 'さわったところに キラキラが とびちります。',
-  both:    'わんちゃんも キラキラも 出てきます。',
+  both:    'おともだちも キラキラも 出てきます。',
 };
 function showTapDesc() {
   $('tap-desc').textContent = TAP_DESC[$('tap-select').value] || '';
@@ -513,6 +525,7 @@ $('motion-select').addEventListener('change', () => {
   showMotionDesc();
   const m = MOTIONS[$('motion-select').value];
   if (m) { $('travel-select').value = m.defaultTravel || 'none'; showTravelDesc(); }
+  syncRandomLock();
 });
 
 /** canvas に絵をおさめて表示する（プレビュー用） */
@@ -537,11 +550,9 @@ function openSpot(motionName, playAfter) {
 
   const img = state.playImage;
   if (!state.spots[state.spotKey]) {
-    // しっぽは体のうしろがわ、前足は下のほうにあることが多い
-    const back = state.spotKey === 'tail';
     state.spots[state.spotKey] = {
-      x: img.width * (back ? 0.82 : 0.28),
-      y: img.height * (back ? 0.45 : 0.80),
+      x: img.width * 0.78,          // しっぽがあることの多い あたりを はじめの場所に
+      y: img.height * 0.45,
       r: Math.max(img.width, img.height) * 0.26,
     };
   }
@@ -615,46 +626,58 @@ $('btn-back-motion').addEventListener('click', () => {
 
 /* ---------- 再生 ---------- */
 /** 「おまかせ」のときは、動き・はやさ・ゆらす場所をその場でくじ引きする */
-function pickMotion() {
-  const pick = (arr) => arr[(Math.random() * arr.length) | 0];
-  const travelKeys = Object.keys(TRAVELS);
-  const chosenTravel = $('travel-select').value;
-  const chosen = $('motion-select').value;
+const pickOne = (arr) => arr[(Math.random() * arr.length) | 0];
+const SPEEDS = ['1.4', '2', '2.8', '4'];
+let lastPicked = null;
 
-  if (chosen !== RANDOM) {
-    const m = MOTIONS[chosen];
-    return {
-      name: chosen,
-      speed: $('speed-select').value,
-      spot: m.needsSpot ? state.spots[m.needsSpot] : null,
-      travel: chosenTravel === RANDOM ? pick(travelKeys) : chosenTravel,
-    };
-  }
+/** えらんだとおりの 組み合わせ */
+function fixedCombo() {
+  const name = $('motion-select').value;
+  const m = MOTIONS[name];
+  const t = $('travel-select').value;
+  return {
+    name,
+    speed: $('speed-select').value,
+    spot: m.needsSpot ? state.spots[m.needsSpot] : null,
+    travel: t === RANDOM ? pickOne(Object.keys(TRAVELS)) : t,
+  };
+}
 
-  // おまかせ：動き・はやさ・ゆらす場所・動きまわりかた を ぜんぶ引き直す
-  const pool = motionsForPart(state.part)
+/** おまかせ：動き・はやさ・動きまわりかた・ゆらす場所 を ぜんぶ引き直す。
+ *  おなじ動きが 2回つづかないようにしている。 */
+function randomCombo() {
+  let pool = motionsForPart(state.part)
     .filter((k) => !MOTIONS[k].needsSpot || state.spots[MOTIONS[k].needsSpot]);
-  const name = pool.length ? pick(pool) : 'pyoko';
+  if (pool.length > 1 && lastPicked) {
+    const without = pool.filter((k) => k !== lastPicked);
+    if (without.length) pool = without;
+  }
+  const name = pool.length ? pickOne(pool) : 'pyoko';
+  lastPicked = name;
   const keys = Object.keys(state.spots);
-  const spot = MOTIONS[name].needsSpot && keys.length ? state.spots[pick(keys)] : null;
-  return { name, speed: pick(['1.4', '2', '2.8', '4']), spot, travel: pick(travelKeys) };
+  const spot = MOTIONS[name].needsSpot && keys.length ? state.spots[pickOne(keys)] : null;
+  return { name, speed: pickOne(SPEEDS), spot, travel: pickOne(Object.keys(TRAVELS)) };
 }
 
 function play() {
   if (!state.playImage) return;
-  const pick = pickMotion();
-  const m = MOTIONS[pick.name];
-  if (m.needsSpot && !pick.spot) { openSpot(pick.name, true); return; }
+  const isShuffle = $('motion-select').value === RANDOM;
+  lastPicked = null;
+  const combo = isShuffle ? randomCombo() : fixedCombo();
+  const m = MOTIONS[combo.name];
+  if (m.needsSpot && !combo.spot) { openSpot(combo.name, true); return; }
 
   savePlay();
   player.start({
     cutout: state.playImage,
-    motionName: pick.name,
-    speed: pick.speed,
+    motionName: combo.name,
+    speed: combo.speed,
     part: state.part,
-    spot: pick.spot,
-    travel: pick.travel,
+    spot: combo.spot,
+    travel: combo.travel,
     tap: $('tap-select').value,
+    // おまかせのときは、しばらくすると つぎの組み合わせに ひとりでに変わる
+    shuffle: isShuffle ? randomCombo : null,
     onExit: () => showScreen('screen-motion'),
   });
 }
@@ -673,7 +696,7 @@ $('btn-back-part2').addEventListener('click', () => {
   else showScreen('screen-part');
 });
 
-/* ---------- 前回のわんちゃんを覚えておく（この端末の中だけ） ---------- */
+/* ---------- 前回のせっていを覚えておく（この端末の中だけ） ---------- */
 /** 絵を小さくして dataURL にする（保存する量をおさえるため） */
 function toDataURL(img, maxSide) {
   const s = Math.min(1, maxSide / Math.max(img.width, img.height));
@@ -696,8 +719,10 @@ const spotsToRatio = (spots, img) => {
 const spotsFromRatio = (ratios, img) => {
   const out = {};
   for (const k of Object.keys(ratios || {})) {
-    out[k] = { x: ratios[k].x * img.width, y: ratios[k].y * img.height,
-               r: ratios[k].r * Math.max(img.width, img.height) };
+    // 前のばんの「しっぽ」「おて」は、いまは ひとつの「ふりふり」にまとめてある
+    const key = (k === 'tail' || k === 'te') ? 'wave' : k;
+    out[key] = { x: ratios[k].x * img.width, y: ratios[k].y * img.height,
+                 r: ratios[k].r * Math.max(img.width, img.height) };
   }
   return out;
 };
@@ -734,6 +759,7 @@ function applyRecord(rec) {
     fillMotionSelect(state.part, rec.motion);
     fillTravelSelect(rec.travel || (MOTIONS[rec.motion] || {}).defaultTravel || 'none');
     if (rec.tap) { $('tap-select').value = rec.tap; showTapDesc(); }
+    syncRandomLock();
     if (rec.speed && [...$('speed-select').options].some((o) => o.value === rec.speed)) {
       $('speed-select').value = rec.speed;
     }
