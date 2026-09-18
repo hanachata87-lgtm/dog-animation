@@ -1,0 +1,17 @@
+{
+  "name": "わんわん ぴょこぴょこ",
+  "short_name": "わんわん",
+  "description": "犬の写真を切り抜いて、かわいく動かすアプリ",
+  "start_url": "./",
+  "scope": "./",
+  "display": "fullscreen",
+  "display_override": ["fullscreen", "standalone"],
+  "orientation": "any",
+  "background_color": "#fff6f2",
+  "theme_color": "#ffd9e8",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

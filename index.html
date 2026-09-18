@@ -7,6 +7,11 @@
 <meta name="theme-color" content="#ffd9e8">
 <meta name="description" content="犬の写真を切り抜いて、かわいく動かすアプリ。写真はスマホの中だけで処理します。">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🐶</text></svg>">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon-192.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <link rel="stylesheet" href="styles.css">
 </head>
 <body>
@@ -32,6 +37,44 @@
     </section>
 
     <p class="hint" id="start-hint">はじめてのときは、犬がはっきり写っている明るい写真がおすすめです。</p>
+
+    <details class="parent">
+      <summary>おうちのかたへ：キーボードや スワイプで 画面が変わってしまうとき</summary>
+      <div class="parent-body">
+        <h3>アプリの中でやっていること</h3>
+        <ul>
+          <li>再生中は <b>キーボードの入力をすべて止めます</b>（打っても何も起きません）</li>
+          <li>「もどる」が起きたら <b>自動で押しもどします</b>（連打されても足りるよう15回ぶん用意しています）</li>
+          <li>画面のはしからのスワイプ・ピンチ・引っぱって更新・長おしメニューを止めます</li>
+          <li>再生中は画面が消えないようにします</li>
+        </ul>
+
+        <h3>ただし、これだけは止められません</h3>
+        <p>キーボードのショートカットで<b>電卓などが立ち上がるのは、タブレット本体（Android）の動き</b>です。
+          ブラウザで動くアプリからは止められません。画面のいちばん上から下へはらったときに出る通知バーも同じです。
+          確実にふせぐには、下のどちらかをおすすめします。</p>
+
+        <h3>① キーボードを外す（いちばん確実）</h3>
+        <p>着脱式のカバーなら外してください。Bluetoothキーボードなら
+          「設定 → 接続済みのデバイス」から接続を切ります。</p>
+
+        <h3>② Androidの「アプリ固定（画面の固定）」を使う</h3>
+        <ol>
+          <li>設定 → セキュリティとプライバシー →（その他のセキュリティ設定）→ <b>アプリ固定</b>
+            ※機種により「画面の固定」</li>
+          <li>ONにする（「固定を解除する前にPINを要求」もONにすると、より安全です）</li>
+          <li>このアプリを開く</li>
+          <li>最近使ったアプリの画面を出す（□ボタン、またはジェスチャー操作なら画面の下から上にスワイプして指を止める）</li>
+          <li>このアプリのアイコンをタップ → <b>「固定」</b>をえらぶ</li>
+        </ol>
+        <p>固定中はほかのアプリに切りかわらないので、キーボードをたたいても電卓は出ません。<br>
+          解除するときは「もどる」と「ホーム」を同時に長おし（ジェスチャー操作なら、画面の下から上にスワイプして長おし）します。</p>
+
+        <h3>③ ホーム画面に追加して ひらく</h3>
+        <p>Chromeのメニュー（⋮）→「ホーム画面に追加」。
+          そこから開くとタブやアドレスバーのない全画面になり、画面のはしをはらっても「もどる」が起きにくくなります。</p>
+      </div>
+    </details>
   </div>
 </section>
 
