@@ -30,6 +30,9 @@
       <input type="file" id="file-input" accept="image/*" hidden>
     </label>
 
+    <button class="btn btn-camera btn-huge" id="btn-camera">📷 カメラで あそぶ</button>
+    <p class="hint camera-hint">とった写真は <b>どこにも のこりません</b>。スマホの写真にも 入りません。</p>
+
     <button class="btn btn-ghost" id="btn-resume" hidden>まえのつづきから あそぶ</button>
 
     <section class="fav-area" id="fav-area" hidden>
@@ -241,6 +244,30 @@
     <span class="exit-label">ながおし</span>
   </button>
   <div class="toast" id="play-toast">さわっても だいじょうぶ！</div>
+</div>
+
+<!-- ========== カメラ（どこをさわっても パシャッ） ========== -->
+<div class="player camera" id="camera" hidden>
+  <canvas id="camera-canvas"></canvas>
+
+  <button class="exit-btn flip-btn" id="cam-flip" aria-label="ながおしで カメラを きりかえる">
+    <svg viewBox="0 0 48 48" aria-hidden="true">
+      <circle class="ring-bg" cx="24" cy="24" r="20"></circle>
+      <circle class="ring-fg" id="cam-flip-ring" cx="24" cy="24" r="20"></circle>
+    </svg>
+    <span class="exit-label flip-label">🔄</span>
+  </button>
+
+  <button class="exit-btn" id="cam-exit" aria-label="ながおしで おわる">
+    <svg viewBox="0 0 48 48" aria-hidden="true">
+      <circle class="ring-bg" cx="24" cy="24" r="20"></circle>
+      <circle class="ring-fg" id="cam-exit-ring" cx="24" cy="24" r="20"></circle>
+    </svg>
+    <span class="exit-label">ながおし</span>
+  </button>
+
+  <div class="shutter-hint" id="cam-shutter" aria-hidden="true"><span></span></div>
+  <div class="toast" id="cam-toast">どこでも さわると パシャッ！</div>
 </div>
 
 <div class="alert" id="alert" hidden><div class="alert-box"><p id="alert-text"></p><button class="btn btn-primary" id="alert-ok">OK</button></div></div>

@@ -176,3 +176,17 @@ export function buildFaceCrop(cutout, cx, cy, r) {
   ctx.globalCompositeOperation = 'source-over';
   return out;
 }
+
+
+/** マスクの大きさを かえる（いちばん近い点をとる） */
+export function resampleMask(src, sw, sh, dw, dh) {
+  const out = new Uint8Array(dw * dh);
+  for (let y = 0; y < dh; y++) {
+    const sy = Math.min(sh - 1, (y * sh / dh) | 0);
+    for (let x = 0; x < dw; x++) {
+      const sx = Math.min(sw - 1, (x * sw / dw) | 0);
+      out[y * dw + x] = src[sy * sw + sx];
+    }
+  }
+  return out;
+}

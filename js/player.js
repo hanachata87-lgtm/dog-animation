@@ -10,9 +10,8 @@ import { getMotion } from './motions.js';
 import { drawBodyBack, drawBodyFront, restRig, BODY_HEIGHT } from './body.js';
 import { buildWiggle } from './wiggle.js';
 import { createTravel } from './travel.js';
+import { createLock } from './lock.js';
 
-const HOLD_MS   = 2500;   // 大人だけができるながおしの時間
-const RING_LEN  = 2 * Math.PI * 20;
 const SPARKLES  = ['✨', '💖', '⭐️', '🌸'];
 
 export function createPlayer({ root, canvas, exitBtn, ring, toast }) {
@@ -34,7 +33,6 @@ export function createPlayer({ root, canvas, exitBtn, ring, toast }) {
   let stamps = [];               // さわるたびに ふえる おともだち
   let particles = [];
   let rafId = 0;
-  let wakeLock = null;
   let cssW = 0, cssH = 0;
 
   /* ---------- 大きさあわせ ---------- */
@@ -302,71 +300,15 @@ export function createPlayer({ root, canvas, exitBtn, ring, toast }) {
     ctx.restore();
   }
 
-  /* ---------- さわっても止まらないための守り ---------- */
-  const block = (e) => { e.preventDefault(); };
-  const onPointerDown = (e) => {
-    if (exitBtn.contains(e.target)) return;   // おわるボタンだけは別あつかい
+  /* ---------- さわったときの反応 ---------- */
+  const onTouch = (e) => {
     boost = Math.min(1, boost + 0.8);
     if (tapMode === 'dog' || tapMode === 'both') addStamp(e.clientX, e.clientY);
     if (tapMode === 'sparkle' || tapMode === 'both') spawnSparkles(e.clientX, e.clientY);
   };
 
-  /* --- キーボードを さわっても 何も起きないようにする ---
-     （ページの中の動きは止められるが、電卓を出すような
-       タブレット本体のショートカットは ブラウザからは止められない。
-       そちらは Android の「アプリ固定」で止める。README を参照） */
-  const blockKey = (e) => { e.preventDefault(); e.stopPropagation(); };
-
-  /* --- 画面のはしを指ではらっても「もどる」が効かないようにする ---
-     もどるが1回起きるたびに、履歴をつぎたして押しもどす。
-     連打されても足りるように、はじめに何回ぶんか ためておく。 */
-  const HISTORY_DEPTH = 15;
-  let pushedStates = 0;
-  function pushGuard(n) {
-    for (let i = 0; i < n; i++) { history.pushState({ dogPlay: true }, ''); pushedStates++; }
-  }
-  const onPopState = () => {
-    if (!running) return;
-    pushedStates = Math.max(0, pushedStates - 1);
-    pushGuard(3);                 // 1回もどられたら 3回ぶん つぎたす
-  };
-
-  /* --- まちがえてページを閉じそうになったら ひきとめる --- */
-  const onBeforeUnload = (e) => { e.preventDefault(); e.returnValue = ''; return ''; };
-
-  /* ---------- ながおしでおわる ---------- */
-  let holdStart = 0, holdRaf = 0, holdId = null;
-
-  function holdTick(now) {
-    const p = Math.min(1, (now - holdStart) / HOLD_MS);
-    ring.style.strokeDashoffset = String(RING_LEN * (1 - p));
-    if (p >= 1) { cancelHold(); stop(); return; }
-    holdRaf = requestAnimationFrame(holdTick);
-  }
-  function startHold(e) {
-    e.preventDefault(); e.stopPropagation();
-    holdId = e.pointerId;
-    if (exitBtn.setPointerCapture) { try { exitBtn.setPointerCapture(e.pointerId); } catch {} }
-    exitBtn.classList.add('is-holding');
-    holdStart = performance.now();
-    cancelAnimationFrame(holdRaf);
-    holdRaf = requestAnimationFrame(holdTick);
-  }
-  function cancelHold(e) {
-    if (e) { e.stopPropagation(); if (holdId !== null && e.pointerId !== holdId) return; }
-    holdId = null;
-    cancelAnimationFrame(holdRaf);
-    exitBtn.classList.remove('is-holding');
-    ring.style.strokeDashoffset = String(RING_LEN);
-  }
-
-  /* ---------- 画面をつけたままにする ---------- */
-  async function requestWakeLock() {
-    try {
-      if ('wakeLock' in navigator) wakeLock = await navigator.wakeLock.request('screen');
-    } catch { /* 使えない端末では何もしない */ }
-  }
-  const onVisibility = () => { if (running && document.visibilityState === 'visible') requestWakeLock(); };
+  /* 子どもロック（キーボード・もどる・スワイプ・ながおし終了）は lock.js */
+  const lock = createLock({ root, exitBtn, ring, onTouch, onExit: () => finish() });
 
   /* ---------- 動き・はやさ・動きまわりかた を あてはめる ---------- */
   function applyCombo(combo, now) {
@@ -417,73 +359,26 @@ export function createPlayer({ root, canvas, exitBtn, ring, toast }) {
 
     window.addEventListener('resize', resize);
     if (window.visualViewport) window.visualViewport.addEventListener('resize', resize);
-    // 画面のはしからの スワイプも のがさないよう、ページ全体でうけとめる
-    document.addEventListener('touchstart', block, { passive: false, capture: true });
-    document.addEventListener('touchmove',  block, { passive: false, capture: true });
-    root.addEventListener('contextmenu', block);
-    root.addEventListener('dblclick', block);
-    root.addEventListener('pointerdown', onPointerDown);
-    for (const type of ['keydown', 'keyup', 'keypress']) {
-      window.addEventListener(type, blockKey, { capture: true });
-    }
-    window.addEventListener('beforeunload', onBeforeUnload);
-    document.documentElement.classList.add('is-playing');
-    if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
-    exitBtn.addEventListener('pointerdown', startHold);
-    exitBtn.addEventListener('pointerup', cancelHold);
-    exitBtn.addEventListener('pointercancel', cancelHold);
-    exitBtn.addEventListener('pointerleave', cancelHold);
-    document.addEventListener('visibilitychange', onVisibility);
-
-    // もどるボタン・はしからのスワイプでも 抜けられないようにする
-    pushedStates = 0;
-    pushGuard(HISTORY_DEPTH);
-    window.addEventListener('popstate', onPopState);
-
-    try { if (root.requestFullscreen) await root.requestFullscreen({ navigationUI: 'hide' }); } catch {}
-    // 全画面のあいだは、ブラウザが受けとるキーも ここで にぎっておく
-    try { if (navigator.keyboard && navigator.keyboard.lock) await navigator.keyboard.lock(); } catch {}
-    requestWakeLock();
+    lock.start();
 
     cancelAnimationFrame(rafId);
     rafId = requestAnimationFrame(frame);
   }
 
-  function stop() {
+  /** 画面を ひらく前のじょうたいに もどす（ながおしで終わったあと） */
+  function finish() {
     if (!running) return;
     running = false;
     shuffleFn = null;
     nextSwitchAt = Infinity;
     cancelAnimationFrame(rafId);
-
     window.removeEventListener('resize', resize);
     if (window.visualViewport) window.visualViewport.removeEventListener('resize', resize);
-    document.removeEventListener('touchstart', block, { capture: true });
-    document.removeEventListener('touchmove',  block, { capture: true });
-    for (const type of ['keydown', 'keyup', 'keypress']) {
-      window.removeEventListener(type, blockKey, { capture: true });
-    }
-    window.removeEventListener('beforeunload', onBeforeUnload);
-    document.documentElement.classList.remove('is-playing');
-    try { if (navigator.keyboard && navigator.keyboard.unlock) navigator.keyboard.unlock(); } catch {}
-    root.removeEventListener('contextmenu', block);
-    root.removeEventListener('dblclick', block);
-    root.removeEventListener('pointerdown', onPointerDown);
-    exitBtn.removeEventListener('pointerdown', startHold);
-    exitBtn.removeEventListener('pointerup', cancelHold);
-    exitBtn.removeEventListener('pointercancel', cancelHold);
-    exitBtn.removeEventListener('pointerleave', cancelHold);
-    document.removeEventListener('visibilitychange', onVisibility);
-    window.removeEventListener('popstate', onPopState);
-
-    if (wakeLock) { try { wakeLock.release(); } catch {} wakeLock = null; }
-    if (document.fullscreenElement) { try { document.exitFullscreen(); } catch {} }
-    // ためておいた履歴を まとめて片づける（もどるボタンが効くようにもどす）
-    if (pushedStates > 0) { const n = pushedStates; pushedStates = 0; try { history.go(-n); } catch {} }
-
     root.hidden = true;
     if (onExitCallback) onExitCallback();
   }
+
+  function stop() { lock.stop(); finish(); }
 
   return { start, stop };
 }

@@ -98,6 +98,7 @@ body{overflow:hidden;}
 .toast{
   position:absolute;left:50%;bottom:calc(24px + var(--safe-b));transform:translateX(-50%);
   background:rgba(0,0,0,.45);color:#fff;padding:10px 18px;border-radius:999px;font-size:13px;
+  width:max-content;max-width:calc(100vw - 32px);text-align:center;
   transition:opacity .6s;pointer-events:none;
 }
 .toast.is-hidden{opacity:0;}
@@ -138,3 +139,25 @@ html.is-playing, html.is-playing body{
 /* おまかせのときは、動きまわりかた と はやさ は じどうで決まる */
 .field.is-off{opacity:.45;}
 .field.is-off .select{background:#f6f0f3;}
+
+/* ===== カメラ ===== */
+.btn-camera{background:#4fb6d6;}
+.camera-hint{text-align:center;margin:-2px 0 14px;}
+
+.camera{background:#111;}
+.flip-btn{right:auto;left:8px;}
+.flip-label{font-size:22px;}
+
+/* 画面のしたの まるいボタン（見た目だけ。どこをさわっても パシャッ） */
+.shutter-hint{
+  position:absolute;left:50%;bottom:calc(28px + var(--safe-b));transform:translateX(-50%);
+  width:84px;height:84px;border-radius:50%;
+  border:6px solid rgba(255,255,255,.9);background:rgba(255,255,255,.18);
+  pointer-events:none;
+  animation:shutterPulse 2.2s ease-in-out infinite;
+}
+.shutter-hint span{position:absolute;inset:10px;border-radius:50%;background:rgba(255,255,255,.92);}
+.shutter-hint.is-shot{animation:shutterShot .22s ease-out;}
+@keyframes shutterPulse{0%,100%{transform:translateX(-50%) scale(1);}50%{transform:translateX(-50%) scale(1.07);}}
+@keyframes shutterShot{0%{transform:translateX(-50%) scale(1);}35%{transform:translateX(-50%) scale(.82);}100%{transform:translateX(-50%) scale(1);}}
+.camera .toast{bottom:calc(128px + var(--safe-b));}

@@ -11,7 +11,7 @@
    ============================================================ */
 
 const GRAVITY = 2100;       // 落ちる速さ（px/秒/秒）
-const RUN_MS  = 1700;       // 画面をよこぎるのにかかる時間
+export const RUN_MS = 1700;  // 画面をよこぎるのにかかる時間
 const REST_MS = 320;        // 消えてから 反対がわに出てくるまでの間
 
 export const TRAVELS = {
@@ -23,8 +23,9 @@ export const TRAVELS = {
 /**
  * @param {string} kind  none / run / bounce
  * @param {number} tempo はやさの倍率（大きいほど ゆっくり）。動きの速さとそろえる。
+ * @param {{x:number,y:number}} [start] スーパーボールが 最初に出てくる場所（なければ 上のまん中）
  */
-export function createTravel(kind, tempo = 1) {
+export function createTravel(kind, tempo = 1, start = null) {
   const mode = TRAVELS[kind] ? kind : 'none';
   const slow = Math.max(0.2, tempo);
   let started = false;
@@ -35,8 +36,8 @@ export function createTravel(kind, tempo = 1) {
   const rand = (a, b) => a + Math.random() * (b - a);
 
   function startBounce(w, h, ow, oh) {
-    x = w / 2;
-    y = h * 0.35;
+    x = start ? start.x : w / 2;
+    y = start ? start.y : h * 0.35;
     vx = rand(0.30, 0.55) * w * (Math.random() < 0.5 ? -1 : 1);
     vy = 0;
     spin = 0; vspin = 0;

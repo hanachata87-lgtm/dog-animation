@@ -4,8 +4,9 @@
    ============================================================ */
 
 import { loadSegmenter, segmentAt } from './segmenter.js';
-import { loadPhotoToCanvas, maskFromLabels, paintCircle, buildCutout, buildFaceCrop } from './cutout.js';
+import { loadPhotoToCanvas, maskFromLabels, paintCircle, buildCutout, buildFaceCrop, resampleMask } from './cutout.js';
 import { createPlayer } from './player.js';
+import { createCamera, cameraSupported, cameraErrorMessage } from './camera.js';
 import { MOTIONS, motionsForPart } from './motions.js';
 import { TRAVELS } from './travel.js';
 
@@ -54,6 +55,17 @@ const player = createPlayer({
   toast: $('play-toast'),
 });
 
+const camera = createCamera({
+  root: $('camera'),
+  canvas: $('camera-canvas'),
+  exitBtn: $('cam-exit'),
+  ring: $('cam-exit-ring'),
+  flipBtn: $('cam-flip'),
+  flipRing: $('cam-flip-ring'),
+  toast: $('cam-toast'),
+  shutterHint: $('cam-shutter'),
+});
+
 /* ---------- 画面きりかえ ---------- */
 function showScreen(id) {
   document.querySelectorAll('.screen').forEach((s) => s.classList.toggle('is-active', s.id === id));
@@ -68,6 +80,17 @@ function spinner(on, text = 'よみこみ中…') {
   $('spinner-text').textContent = text;
   $('cut-spinner').hidden = !on;
 }
+
+/* ---------- カメラであそぶ ---------- */
+$('btn-camera').addEventListener('click', async () => {
+  if (!cameraSupported()) { alertBox(cameraErrorMessage(null)); return; }
+  try {
+    await camera.start({ onExit: () => showScreen('screen-start') });
+  } catch (err) {
+    console.error(err);
+    alertBox(cameraErrorMessage(err));
+  }
+});
 
 /* ---------- 写真をえらぶ ---------- */
 $('file-input').addEventListener('change', async (e) => {
@@ -310,18 +333,6 @@ async function tapSegment(pt) {
   } finally {
     spinner(false);
   }
-}
-
-function resampleMask(src, sw, sh, dw, dh) {
-  const out = new Uint8Array(dw * dh);
-  for (let y = 0; y < dh; y++) {
-    const sy = Math.min(sh - 1, (y * sh / dh) | 0);
-    for (let x = 0; x < dw; x++) {
-      const sx = Math.min(sw - 1, (x * sw / dw) | 0);
-      out[y * dw + x] = src[sy * sw + sx];
-    }
-  }
-  return out;
 }
 
 /* ---------- 切り抜き完了 → 顔だけ／ぜんしん をえらぶ ---------- */
