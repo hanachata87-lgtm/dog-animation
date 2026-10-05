@@ -246,7 +246,7 @@
   <div class="toast" id="play-toast">さわっても だいじょうぶ！</div>
 </div>
 
-<!-- ========== カメラ（どこをさわっても パシャッ） ========== -->
+<!-- ========== カメラ（まるいボタンで パシャッ） ========== -->
 <div class="player camera" id="camera" hidden>
   <canvas id="camera-canvas"></canvas>
 
@@ -266,8 +266,8 @@
     <span class="exit-label">ながおし</span>
   </button>
 
-  <div class="shutter-hint" id="cam-shutter" aria-hidden="true"><span></span></div>
-  <div class="toast" id="cam-toast">どこでも さわると パシャッ！</div>
+  <button class="shutter-btn" id="cam-shutter" aria-label="しゃしんを とる"><span></span></button>
+  <div class="toast" id="cam-toast">まるいボタンを おすと パシャッ！</div>
 </div>
 
 <div class="alert" id="alert" hidden><div class="alert-box"><p id="alert-text"></p><button class="btn btn-primary" id="alert-ok">OK</button></div></div>

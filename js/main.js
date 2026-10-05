@@ -63,7 +63,7 @@ const camera = createCamera({
   flipBtn: $('cam-flip'),
   flipRing: $('cam-flip-ring'),
   toast: $('cam-toast'),
-  shutterHint: $('cam-shutter'),
+  shutterBtn: $('cam-shutter'),
 });
 
 /* ---------- 画面きりかえ ---------- */

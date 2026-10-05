@@ -2,7 +2,7 @@
    camera.js
    あそび用のカメラ。撮った写真は「どこにも のこらない」。
 
-   ・どこをさわっても パシャッ（連打OK）。音と フラッシュと キラキラ
+   ・画面したの まるいボタンで パシャッ（連打OK）。音と キラキラ。画面は 光らせない（まぶしくないように）
    ・撮った絵は、すぐに切り抜かれて、ライブ映像の上で 動きはじめる
        - その場ではずむ／スーパーボール／走りまわる
        - ときどき 「びっくり箱」：走りぬけて 消えてしまう
@@ -49,7 +49,7 @@ export function cameraErrorMessage(err) {
   return 'カメラを ひらけませんでした。';
 }
 
-export function createCamera({ root, canvas, exitBtn, ring, flipBtn, flipRing, toast, shutterHint }) {
+export function createCamera({ root, canvas, exitBtn, ring, flipBtn, flipRing, toast, shutterBtn }) {
   const ctx = canvas.getContext('2d');
 
   /* ---------- じょうたい ---------- */
@@ -63,7 +63,6 @@ export function createCamera({ root, canvas, exitBtn, ring, flipBtn, flipRing, t
 
   let sprites = [];
   let particles = [];
-  let flash = 0;
   let shots = 0;
   let lastShotAt = 0;
   let aiReady = false;
@@ -365,30 +364,31 @@ export function createCamera({ root, canvas, exitBtn, ring, flipBtn, flipRing, t
     particles = particles.filter((p) => p.life > 0);
   }
 
-  /* ---------- パシャッ！ ---------- */
-  function shoot(e) {
+  /* ---------- パシャッ！（まるいボタン） ---------- */
+  function shoot() {
     const now = performance.now();
     if (now - lastShotAt < MIN_INTERVAL) return;       // 連打でも 追いつけるぐらいの 間かく
     lastShotAt = now;
     unlockAudio();
-    if (!videoReady()) { puff(e.clientX, e.clientY, 4); return; }
+    if (!videoReady()) return;
 
     shots++;
     root.dataset.shots = String(shots);
     shutter();
     setTimeout(voice, 110);                            // カシャッ → ぴょん／ワン／ニャー
-    flash = 1;
-    shutterHint.classList.remove('is-shot'); void shutterHint.offsetWidth; shutterHint.classList.add('is-shot');
+    // 画面は 光らせない。ボタンが ぽよんと へこむだけ
+    shutterBtn.classList.remove('is-shot'); void shutterBtn.offsetWidth; shutterBtn.classList.add('is-shot');
 
+    // 絵は 画面の うえのほうの どこかに ぽんっと出てくる（ボタンや つまみの下は さける）
+    const at = { x: rand(cssW * 0.15, cssW * 0.85), y: rand(cssH * 0.2, cssH * 0.6) };
     const frame = grabFrame();
-    const sp = spawn(ovalCutout(frame), { x: e.clientX, y: e.clientY }, now, shots === 1);
+    const sp = spawn(ovalCutout(frame), at, now, shots === 1);
     enqueueUpgrade(frame, sp);
-    puff(e.clientX, e.clientY);
+    puff(at.x, at.y);
 
     if (shots % PARADE_EVERY === 0) {
       setTimeout(fanfare, 250);
       startParade(now + 400);
-      flash = 1;
     }
     root.dataset.sprites = String(sprites.filter((s) => s.alive && !s.dying).length);
   }
@@ -405,18 +405,13 @@ export function createCamera({ root, canvas, exitBtn, ring, flipBtn, flipRing, t
     sprites = sprites.filter((s) => s.alive);
     drawParticles(dt);
 
-    if (flash > 0.01) {                                // フラッシュ（ぱっと光って すっと消える）
-      ctx.fillStyle = `rgba(255,255,255,${(flash * 0.85).toFixed(3)})`;
-      ctx.fillRect(0, 0, cssW, cssH);
-      flash *= Math.exp(-dt / 110);
-    }
     root.dataset.sprites = String(sprites.filter((s) => !s.dying).length);
   }
 
   /* ---------- 子どもロック ---------- */
   const lock = createLock({
     root, exitBtn, ring,
-    onTouch: (e) => { if (!flipBtn.contains(e.target)) shoot(e); },      // どこをさわっても パシャッ
+    onTouch: (e) => { if (shutterBtn.contains(e.target)) shoot(); },      // まるいボタンだけ パシャッ（ほかは なにも起きない）
     onExit: () => finish(),
   });
 
@@ -433,7 +428,7 @@ export function createCamera({ root, canvas, exitBtn, ring, flipBtn, flipRing, t
       root.hidden = false;
       resize();
       running = true;
-      sprites = []; particles = []; flash = 0; shots = 0; pending = 0; chain = Promise.resolve();
+      sprites = []; particles = []; shots = 0; pending = 0; chain = Promise.resolve();
       root.dataset.shots = '0'; root.dataset.sprites = '0'; root.dataset.facing = facing; root.dataset.upgraded = '0';
       lastTime = performance.now();
       await attach(s);
